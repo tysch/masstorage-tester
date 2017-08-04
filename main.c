@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <time.h>
 
@@ -21,9 +22,53 @@ uint32_t xorshift128()
 	return t;
 }
 
-int main(void)
+uint64_t tobytes(char * x)
 {
-	time_t start = clock();
+	uint64_t bytes = 0;
+	uint64_t multiplier = 1;
+	int len = 0;
+	while(x[len++]);	
+	for(int i = 0; i < len - 1; i++)
+	{
+		if((x[i] >= '0') && (x[i] < '9'))
+		{
+			bytes *= 10;
+			bytes += (x[i] - 48);
+		}
+		if(x[i] == ' ') continue;
+		if((x[i] > 'A') && (x[i] < 'z'))
+		{
+			switch (x[i])
+			{
+				case 'G':
+					multiplier = 1024*1024*1024;
+					break;
+				case 'g':
+					multiplier = 1024*1024*1024;
+					break;
+				case 'M':
+					multiplier = 1024*1024;
+					break;
+				case 'm':
+					multiplier = 1024*1024;
+					break;
+				case 'K':
+					multiplier = 1024;
+					break;
+				case 'k':
+					multiplier = 1024;
+					break;
+			}
+		}
+		bytes *= multiplier;
+	}
+	return bytes;
+}
+
+
+int main(void)
+{	
+	time_t start = time(0);
 	uint32_t t;
 	uint32_t j = 0;
 	FILE* destFile;
@@ -37,7 +82,8 @@ int main(void)
 		}
 		fwrite(buf, 4, 256, destFile);
 	}
-	printf("elapsed %.3f\n", (clock() - start)/1000000.0);
+	printf("%llu\n",tobytes("1000m"));
+	printf("elapsed %.3f\n", (time(0) - start)/1.0);
 	printf("%u \n", state0);	printf("%u \n", state1);	printf("%u \n", state2);	printf("%u \n", state3);
 	return 0;
 }
