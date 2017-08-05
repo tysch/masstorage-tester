@@ -3,10 +3,10 @@
 #include <time.h>
 #include <string.h>
 
-uint64_t totalbyteswritten = 0;
-uint64_t mismatcherrors = 0;
-uint64_t ioerrors = 0;
-uint32_t passage = 0;
+uint64_t totalbyteswritten;
+uint64_t mismatcherrors;
+uint64_t ioerrors;
+uint32_t passage;
 
 uint32_t state0;
 uint32_t state1;
@@ -50,6 +50,12 @@ uint64_t tobytes(char * x)
 		{
 			switch (x[i])
 			{
+				case 'T':
+					multiplier = 1024LL*1024LL*1024LL*1024LL;
+					break;
+				case 't':
+					multiplier = 1024LL*1024LL*1024LL*1024LL;
+					break;
 				case 'G':
 					multiplier = 1024*1024*1024;
 					break;
@@ -98,17 +104,17 @@ void progress(int flag, double percent)
 	fflush(stdout);
 }
 
-void fill(uint64_t bytes)
+void fill(uint64_t bytes, uint64_t filesize)
 { 
-	int n32mfiles = bytes / (1024*1024*32);
-	bytes %= (1024*1024*32);
+	int nfiles = bytes / filesize;
+	bytes %= filesize;
 	char filename[10];
 	uint32_t buf[256];
-	for(int i = 0; i < n32mfiles; i++) /*writing 32MiB files*/
+	for(int i = 0; i < nfiles; i++) 
 	{
 		sprintf(filename, "%i.dat",i);
 		FILE* destfile = fopen(filename, "wb");
-		for(int j = 0; j < 32*1024;j++)
+		for(int j = 0; j < filesize/1024;j++)
 		{
 			for(int k = 0; k < 256; k++)
 			{
@@ -117,10 +123,10 @@ void fill(uint64_t bytes)
 			totalbyteswritten += 4*fwrite(buf, 4, 256, destfile);
 		}
 		fclose(destfile);
-		progress(0, (double)i/n32mfiles);
+		progress(0, (double)i/nfiles);
 	}
 	/*writing remaining data*/
-	sprintf(filename, "%i.dat",n32mfiles);
+	sprintf(filename, "%i.dat",nfiles);
 	FILE* destfile = fopen(filename, "wb");
 	for(int i = 0; i < (bytes / 1024);i++)
 	{
@@ -142,18 +148,18 @@ void cmpbuf(uint32_t * buf1, uint32_t * buf2)
 	}
 }
 
-void readback(uint64_t bytes)
+void readback(uint64_t bytes, uint64_t filesize)
 { 
-	int n32mfiles = bytes / (1024*1024*32);
-	bytes %= (1024*1024*32);
+	int nfiles = bytes / filesize;
+	bytes %= filesize;
 	char filename[10];
 	uint32_t readbuf[256];
 	uint32_t genbuf[256];
-	for(int i = 0; i < n32mfiles; i++) /*writing 32MiB files*/
+	for(int i = 0; i < nfiles; i++) /*writing 32MiB files*/
 	{
 		sprintf(filename, "%i.dat",i);
 		FILE* destfile = fopen(filename, "rb");
-		for(int j = 0; j < 32*1024;j++)
+		for(int j = 0; j < filesize/1024;j++)
 		{
 			for(int k = 0; k < 256; k++)
 			{
@@ -164,10 +170,10 @@ void readback(uint64_t bytes)
 		}
 		fclose(destfile);
 		remove(filename);
-		progress(1, (double)i/n32mfiles);
+		progress(1, (double)i/nfiles);
 	}
 	/*writing remaining data*/
-	sprintf(filename, "%i.dat",n32mfiles);
+	sprintf(filename, "%i.dat",nfiles);
 	FILE* destfile = fopen(filename, "rb");
 	for(int i = 0; i < (bytes / 1024);i++)
 	{
@@ -183,21 +189,41 @@ void readback(uint64_t bytes)
 	remove(filename);
 }
 
-void cycle(uint64_t bytes)
+void cycle(uint64_t bytes, uint64_t filesize)
 {
 	for(passage = 1; ; passage++) 
 	{
 		reseed(passage);
-		fill(bytes);
+		fill(bytes, filesize);
 		reseed(passage);
-		readback(bytes);	
+		readback(bytes, filesize);	
 	}
 }
 
-int main(void)
+int main(int argc, char ** argv)
 {	
-	cycle(tobytes("500M"));
-	//printf("elapsed %.3f\n", (time(0) - start)/1.0);
-	//printf("%u \n", state0);	printf("%u \n", state1);	printf("%u \n", state2);	printf("%u \n", state3);
+	uint64_t bytes;
+	uint64_t filesize = 32*1024*1024;
+	char path[300];
+	printf("\n\nUsage: <path> <total size of written files[kKmMgGtT]> [<size of written blocks[kKmMgGt]>]\n\n");
+	if(0)
+	{
+		;
+	}
+	else
+	{
+		bytes = tobytes(argv[2]);
+		if(argc == 4) filesize = tobytes(argv[3]);
+		strcpy(path,argv[1]);
+		totalbyteswritten = 0;
+		mismatcherrors = 0;
+		ioerrors = 0;
+		passage = 1;
+	}
+	cycle(bytes, filesize);
 	return 0;
 }
+
+
+
+
