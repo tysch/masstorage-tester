@@ -4,8 +4,9 @@
 #include <string.h>
 
 uint64_t totalbyteswritten = 0;
-uint64_t totalbytesread = 0;
 uint64_t mismatcherrors = 0;
+uint64_t ioerrors = 0;
+uint64_t passage = 0;
 
 uint32_t state0;
 uint32_t state1;
@@ -74,45 +75,27 @@ uint64_t tobytes(char * x)
 	return bytes;
 }
 
-void tbwtostr(int mode, char * str)
+void bytestostr(uint64_t bytes, char * str)
 {
-	uint64_t i;	
-	if(mode) i = totalbyteswritten;
-	else i = totalbytesread;
-	if(i < 1024) sprintf(str, "%i B", (int) i );
-	if((i > 1024) && (i < 1024*1024)) sprintf(str, "%.1f KB", i/1024.0);
-	if((i > 1024*1024) && (i < 1024*1024*1024)) sprintf(str, "%.1f MB", i/(1024.0*1024));
-	if((i > 1024*1024*1024) && (i < 1024LL*1024LL*1024LL*1024LL)) sprintf(str, "%.1f GB", i/(1024.0*1024.0*1024.0));
-	if((i > 1024LL*1024LL*1024LL*1024LL)) sprintf(str, "%.1f TB", i/(1024.0*1024.0*1024.0*1024.0));
+	if(bytes < 1024) sprintf(str, "%i B", (int) bytes );
+	if((bytes > 1024) && (bytes < 1024*1024)) sprintf(str, "%.1f KiB", bytes/1024.0);
+	if((bytes > 1024*1024) && (bytes < 1024*1024*1024)) sprintf(str, "%.1f MiB", bytes/(1024.0*1024));
+	if((bytes > 1024*1024*1024) && (bytes < 1024LL*1024LL*1024LL*1024LL)) sprintf(str, "%.1f GiB", bytes/(1024.0*1024.0*1024.0));
+	if((bytes > 1024LL*1024LL*1024LL*1024LL)) sprintf(str, "%.1f TiB", bytes/(1024.0*1024.0*1024.0*1024.0));
 }
 
 void progress(int flag, double percent)
 {
-	char out[100];
-	char tmp[100];
-	percent *= 100;
-	if(flag == 0)
-	{
-		sprintf(out, "\r%.1f%% written", percent);
-		sprintf(tmp, "  ");
-		strcat(out, tmp);
-		tbwtostr(1, tmp);
-		strcat(out, tmp);
-		printf("                      ");
-		printf("%s", out);
-		fflush(stdout);
-	}
-	else 
-	{
-		sprintf(out, "\r%.1f%% read", percent);
-		sprintf(tmp, "  ");
-		strcat(out, tmp);
-		tbwtostr(0, tmp);
-		strcat(out, tmp);
-		printf("                      ");
-		printf("%s", out);
-		fflush(stdout);
-	}
+	percent *= 100;  
+	char status[10];
+	char tbwstr[20];
+	char mmerrstr[20];
+	if(flag) strcpy(status, "read");
+	else strcpy(status,"write");
+	bytestostr(totalbyteswritten,tbwstr);
+	bytestostr(mismatcherrors,mmerrstr);
+	printf("\rPassage = %-9lli  %-3.1f%% %-6s  TBW = %-7s  I/O errors = %-18lli  mismatch errors = %-10s", passage, percent ,status, tbwstr, ioerrors , mmerrstr);
+	fflush(stdout);
 }
 
 void fill(uint64_t bytes)
@@ -176,7 +159,7 @@ void readback(uint64_t bytes)
 			{
 				genbuf[k] = xorshift128();
 			}
-			totalbytesread += 4*fread(readbuf, 4, 256, destfile);
+			ioerrors += (4*fread(readbuf, 4, 256, destfile) - 1024);
 			cmpbuf(readbuf, genbuf);
 		}
 		fclose(destfile);
@@ -191,11 +174,12 @@ void readback(uint64_t bytes)
 		{
 			genbuf[j] = xorshift128();
 		}
-		totalbytesread += 4*fread(readbuf, 4, 256, destfile);
+		ioerrors += (4*fread(readbuf, 4, 256, destfile) - 1024);
 		cmpbuf(readbuf, genbuf);
 	}
 	progress(1, 1.0);
 	fclose(destfile);
+	passage++;
 }
 
 //void cycle(uint64_t bytes)
@@ -211,8 +195,9 @@ int main(void)
 {	
 	char dig[20];
 	reseed(1);
-	fill(tobytes("300M"));
-	readback(tobytes("300M"));
+	fill(tobytes("3000M"));
+	reseed(1);
+	readback(tobytes("3000M"));
 	//printf("elapsed %.3f\n", (time(0) - start)/1.0);
 	//printf("%u \n", state0);	printf("%u \n", state1);	printf("%u \n", state2);	printf("%u \n", state3);
 	return 0;
