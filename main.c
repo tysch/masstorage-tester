@@ -6,7 +6,7 @@
 uint64_t totalbyteswritten = 0;
 uint64_t mismatcherrors = 0;
 uint64_t ioerrors = 0;
-uint64_t passage = 0;
+uint32_t passage = 0;
 
 uint32_t state0;
 uint32_t state1;
@@ -94,7 +94,7 @@ void progress(int flag, double percent)
 	else strcpy(status,"write");
 	bytestostr(totalbyteswritten,tbwstr);
 	bytestostr(mismatcherrors,mmerrstr);
-	printf("\rPassage = %-9lli  %-3.1f%% %-6s  TBW = %-7s  I/O errors = %-18lli  mismatch errors = %-10s", passage, percent ,status, tbwstr, ioerrors , mmerrstr);
+	printf("\rPassage = %-9i  %-3.1f%% %-6s  TBW = %-7s  I/O errors = %-18lli  mismatch errors = %-10s", passage, percent ,status, tbwstr, ioerrors , mmerrstr);
 	fflush(stdout);
 }
 
@@ -163,6 +163,7 @@ void readback(uint64_t bytes)
 			cmpbuf(readbuf, genbuf);
 		}
 		fclose(destfile);
+		remove(filename);
 		progress(1, (double)i/n32mfiles);
 	}
 	/*writing remaining data*/
@@ -179,25 +180,23 @@ void readback(uint64_t bytes)
 	}
 	progress(1, 1.0);
 	fclose(destfile);
-	passage++;
+	remove(filename);
 }
 
-//void cycle(uint64_t bytes)
-//{
-	//readprogress();
-	//reseed();
-	//fill();
-	//readback();
-	//writeprogress();	
-//}
+void cycle(uint64_t bytes)
+{
+	for(passage = 1; ; passage++) 
+	{
+		reseed(passage);
+		fill(bytes);
+		reseed(passage);
+		readback(bytes);	
+	}
+}
 
 int main(void)
 {	
-	char dig[20];
-	reseed(1);
-	fill(tobytes("3000M"));
-	reseed(1);
-	readback(tobytes("3000M"));
+	cycle(tobytes("500M"));
 	//printf("elapsed %.3f\n", (time(0) - start)/1.0);
 	//printf("%u \n", state0);	printf("%u \n", state1);	printf("%u \n", state2);	printf("%u \n", state3);
 	return 0;
