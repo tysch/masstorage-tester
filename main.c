@@ -5,9 +5,7 @@
 
 uint64_t totalbyteswritten = 0;
 uint64_t totalbytesread = 0;
-uint64_t ioerrors = 0;
 uint64_t mismatcherrors = 0;
-
 
 uint32_t state0;
 uint32_t state1;
@@ -93,23 +91,37 @@ void progress(int flag, double percent)
 	char out[100];
 	char tmp[100];
 	percent *= 100;
-	sprintf(out, "\r%.1f%%", percent);
-	sprintf(tmp, "  ");
-	strcat(out, tmp);
-	tbwtostr(1, tmp);
-	strcat(out, tmp);
-	printf("                      ");
-	printf("%s", out);
-	fflush(stdout);
+	if(flag == 0)
+	{
+		sprintf(out, "\r%.1f%% written", percent);
+		sprintf(tmp, "  ");
+		strcat(out, tmp);
+		tbwtostr(1, tmp);
+		strcat(out, tmp);
+		printf("                      ");
+		printf("%s", out);
+		fflush(stdout);
+	}
+	else 
+	{
+		sprintf(out, "\r%.1f%% read", percent);
+		sprintf(tmp, "  ");
+		strcat(out, tmp);
+		tbwtostr(0, tmp);
+		strcat(out, tmp);
+		printf("                      ");
+		printf("%s", out);
+		fflush(stdout);
+	}
 }
 
 void fill(uint64_t bytes)
-{
+{ 
 	int n32mfiles = bytes / (1024*1024*32);
 	bytes %= (1024*1024*32);
 	char filename[10];
-	uint32_t buf[1024];
-	for(int i = 0; i < n32mfiles; i++) //writing 32MiB files
+	uint32_t buf[256];
+	for(int i = 0; i < n32mfiles; i++) /*writing 32MiB files*/
 	{
 		sprintf(filename, "%i.dat",i);
 		FILE* destfile = fopen(filename, "wb");
@@ -124,7 +136,7 @@ void fill(uint64_t bytes)
 		fclose(destfile);
 		progress(0, (double)i/n32mfiles);
 	}
-	//writing remaining data
+	/*writing remaining data*/
 	sprintf(filename, "%i.dat",n32mfiles);
 	FILE* destfile = fopen(filename, "wb");
 	for(int i = 0; i < (bytes / 1024);i++)
@@ -134,16 +146,73 @@ void fill(uint64_t bytes)
 			buf[j] = xorshift128();
 		}
 		totalbyteswritten += 4*fwrite(buf, 4, 256, destfile);
-		progress(0, 1.0);
 	}
 	fclose(destfile);
+	progress(0, 1.0);
 }
+
+void cmpbuf(uint32_t * buf1, uint32_t * buf2)
+{
+	for(int i = 0; i < 256;i++)
+	{
+		if(buf1[i] != buf2[i]) mismatcherrors += 4;
+	}
+}
+
+void readback(uint64_t bytes)
+{ 
+	int n32mfiles = bytes / (1024*1024*32);
+	bytes %= (1024*1024*32);
+	char filename[10];
+	uint32_t readbuf[256];
+	uint32_t genbuf[256];
+	for(int i = 0; i < n32mfiles; i++) /*writing 32MiB files*/
+	{
+		sprintf(filename, "%i.dat",i);
+		FILE* destfile = fopen(filename, "rb");
+		for(int j = 0; j < 32*1024;j++)
+		{
+			for(int k = 0; k < 256; k++)
+			{
+				genbuf[k] = xorshift128();
+			}
+			totalbytesread += 4*fread(readbuf, 4, 256, destfile);
+			cmpbuf(readbuf, genbuf);
+		}
+		fclose(destfile);
+		progress(1, (double)i/n32mfiles);
+	}
+	/*writing remaining data*/
+	sprintf(filename, "%i.dat",n32mfiles);
+	FILE* destfile = fopen(filename, "rb");
+	for(int i = 0; i < (bytes / 1024);i++)
+	{
+		for(int j = 0; j < 256; j++)
+		{
+			genbuf[j] = xorshift128();
+		}
+		totalbytesread += 4*fread(readbuf, 4, 256, destfile);
+		cmpbuf(readbuf, genbuf);
+	}
+	progress(1, 1.0);
+	fclose(destfile);
+}
+
+//void cycle(uint64_t bytes)
+//{
+	//readprogress();
+	//reseed();
+	//fill();
+	//readback();
+	//writeprogress();	
+//}
 
 int main(void)
 {	
 	char dig[20];
 	reseed(1);
-	fill(tobytes("1200M"));
+	fill(tobytes("300M"));
+	readback(tobytes("300M"));
 	//printf("elapsed %.3f\n", (time(0) - start)/1.0);
 	//printf("%u \n", state0);	printf("%u \n", state1);	printf("%u \n", state2);	printf("%u \n", state3);
 	return 0;
