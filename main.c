@@ -9,9 +9,9 @@ uint64_t ioerrors;
 uint32_t passage;
 uint64_t writespeed;
 uint64_t readspeed;
-
+FILE* logfile;
 char path[300];
-
+time_t startrun;
 
 uint32_t state0;
 uint32_t state1;
@@ -120,7 +120,7 @@ void fill(uint64_t bytes, uint64_t filesize)
 	uint64_t bytes_time = bytes;
 	int nfiles = bytes / filesize;
 	bytes %= filesize;
-	char filename[10];
+	char filename[300];
 	uint32_t buf[256];
 	for(int i = 0; i < nfiles; i++) 
 	{
@@ -167,7 +167,7 @@ void readback(uint64_t bytes, uint64_t filesize)
 	uint64_t bytes_time = bytes;
 	int nfiles = bytes / filesize;
 	bytes %= filesize;
-	char filename[10];
+	char filename[300];
 	uint32_t readbuf[256];
 	uint32_t genbuf[256];
 	for(int i = 0; i < nfiles; i++) /*writing 32MiB files*/
@@ -205,6 +205,20 @@ void readback(uint64_t bytes, uint64_t filesize)
 	if((time(NULL) - start) != 0) readspeed = bytes_time/(time(NULL) - start);
 }
 
+void savelog(void)
+{
+	char tbwstr[20];
+	char mmerrstr[20];
+	char rspeedstr[20];
+	char wspeedstr[20];
+	bytestostr(totalbyteswritten,tbwstr);
+	bytestostr(mismatcherrors,mmerrstr);
+	bytestostr(readspeed,rspeedstr);
+	bytestostr(writespeed,wspeedstr);
+	fprintf(logfile,"Passage = %-9i read = %9s/s write = %9s/s TBW = %-8s   I/O errors = %-18llu data errors = %-10s time = %9is \n" , 
+		passage, rspeedstr, wspeedstr, tbwstr, ioerrors , mmerrstr, time(NULL) - startrun); fflush(logfile);
+}
+
 void cycle(uint64_t bytes, uint64_t filesize)
 {
 	for(passage = 1; ; passage++) 
@@ -212,21 +226,25 @@ void cycle(uint64_t bytes, uint64_t filesize)
 		reseed(passage);
 		fill(bytes, filesize);
 		reseed(passage);
-		readback(bytes, filesize);	
+		readback(bytes, filesize);
+		savelog();	
 	}
 }
 
 int main(int argc, char ** argv)
 {	
+
 	uint64_t bytes;
 	uint64_t filesize = 32*1024*1024;
+	startrun = time(NULL);
 	printf("\n\nUsage: <path> <total size of written files[kKmMgGtT]> [<size of written blocks[kKmMgGt]>]\n\n");
-	if(0)
+	if(logfile = fopen("test.log", "r+"))
 	{
 		;
 	}
 	else
 	{
+		logfile = fopen("test.log", "w");
 		bytes = tobytes(argv[2]);
 		if(argc == 4) filesize = tobytes(argv[3]);
 		strcpy(path,argv[1]);
@@ -236,9 +254,7 @@ int main(int argc, char ** argv)
 		passage = 1;
 	}
 	cycle(bytes, filesize);
+	fclose(logfile);
 	return 0;
 }
-
-
-
 
