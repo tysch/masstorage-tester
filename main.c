@@ -252,14 +252,16 @@ int main(int argc, char ** argv)
 	uint64_t bytes;
 	uint64_t filesize = 32*1024*1024;
 	startrun = time(NULL);
+	char logname[20];
+	sprintf(logname, "test%i.log", startrun);
 	printf("\n\nUsage: <path> <total size of written files[kKmMgGtT]> [<size of written blocks[kKmMgGt]>]\n\n");
-	if(logfile = fopen("test.log", "r+"))
+	if(logfile = fopen(logname, "r+"))
 	{
 		//fscanf(logfile, "Passage = %-9i read = %9s/s write = %9s/s TBW = %-8s   I/O errors = %-18llu data errors = %-10s time = %9is \n")
 	}
 	else
 	{
-		logfile = fopen("test.log", "w");
+		logfile = fopen(logname, "w");
 		bytes = tobytes(argv[2]);
 		if(argc == 4) filesize = tobytes(argv[3]);
 		strcpy(path,argv[1]);
