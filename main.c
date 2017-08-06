@@ -10,6 +10,9 @@ uint32_t passage;
 uint64_t writespeed;
 uint64_t readspeed;
 
+char path[300];
+
+
 uint32_t state0;
 uint32_t state1;
 uint32_t state2;
@@ -121,7 +124,7 @@ void fill(uint64_t bytes, uint64_t filesize)
 	uint32_t buf[256];
 	for(int i = 0; i < nfiles; i++) 
 	{
-		sprintf(filename, "%i.dat",i);
+		sprintf(filename, "%s/%i.dat",path,i);
 		FILE* destfile = fopen(filename, "wb");
 		for(int j = 0; j < filesize/1024;j++)
 		{
@@ -135,7 +138,7 @@ void fill(uint64_t bytes, uint64_t filesize)
 		progress(0, (double)i/nfiles);
 	}
 	/*writing remaining data*/
-	sprintf(filename, "%i.dat",nfiles);
+	sprintf(filename, "%s/%i.dat",path,nfiles);
 	FILE* destfile = fopen(filename, "wb");
 	for(int i = 0; i < (bytes / 1024);i++)
 	{
@@ -169,7 +172,7 @@ void readback(uint64_t bytes, uint64_t filesize)
 	uint32_t genbuf[256];
 	for(int i = 0; i < nfiles; i++) /*writing 32MiB files*/
 	{
-		sprintf(filename, "%i.dat",i);
+		sprintf(filename, "%s/%i.dat",path,i);
 		FILE* destfile = fopen(filename, "rb");
 		for(int j = 0; j < filesize/1024;j++)
 		{
@@ -185,7 +188,7 @@ void readback(uint64_t bytes, uint64_t filesize)
 		progress(1, (double)i/nfiles);
 	}
 	/*writing remaining data*/
-	sprintf(filename, "%i.dat",nfiles);
+	sprintf(filename, "%s/%i.dat",path,nfiles);
 	FILE* destfile = fopen(filename, "rb");
 	for(int i = 0; i < (bytes / 1024);i++)
 	{
@@ -217,7 +220,6 @@ int main(int argc, char ** argv)
 {	
 	uint64_t bytes;
 	uint64_t filesize = 32*1024*1024;
-	char path[300];
 	printf("\n\nUsage: <path> <total size of written files[kKmMgGtT]> [<size of written blocks[kKmMgGt]>]\n\n");
 	if(0)
 	{
