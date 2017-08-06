@@ -7,6 +7,8 @@ uint64_t totalbyteswritten;
 uint64_t mismatcherrors;
 uint64_t ioerrors;
 uint32_t passage;
+uint64_t writespeed;
+uint64_t readspeed;
 
 uint32_t state0;
 uint32_t state1;
@@ -96,16 +98,23 @@ void progress(int flag, double percent)
 	char status[10];
 	char tbwstr[20];
 	char mmerrstr[20];
+	char rspeedstr[20];
+	char wspeedstr[20];
 	if(flag) strcpy(status, "read");
 	else strcpy(status,"write");
 	bytestostr(totalbyteswritten,tbwstr);
 	bytestostr(mismatcherrors,mmerrstr);
-	printf("\rPassage = %-9i  %-3.1f%% %-6s  TBW = %-7s  I/O errors = %-18lli  mismatch errors = %-10s", passage, percent ,status, tbwstr, ioerrors , mmerrstr);
+	bytestostr(readspeed,rspeedstr);
+	bytestostr(writespeed,wspeedstr);
+	printf("\rPassage = %-9i%-3.1f%% %-6s read = %9s/s write = %9s/s TBW = %-8s   I/O errors = %-18llu data errors = %-10s", 
+		passage, percent ,status, rspeedstr, wspeedstr, tbwstr, ioerrors , mmerrstr);
 	fflush(stdout);
 }
 
 void fill(uint64_t bytes, uint64_t filesize)
 { 
+	time_t start = time(NULL);
+	uint64_t bytes_time = bytes;
 	int nfiles = bytes / filesize;
 	bytes %= filesize;
 	char filename[10];
@@ -137,6 +146,7 @@ void fill(uint64_t bytes, uint64_t filesize)
 		totalbyteswritten += 4*fwrite(buf, 4, 256, destfile);
 	}
 	fclose(destfile);
+	if((time(NULL) - start) != 0) writespeed = bytes_time/(time(NULL) - start);
 	progress(0, 1.0);
 }
 
@@ -150,6 +160,8 @@ void cmpbuf(uint32_t * buf1, uint32_t * buf2)
 
 void readback(uint64_t bytes, uint64_t filesize)
 { 
+	time_t start = time(NULL);
+	uint64_t bytes_time = bytes;
 	int nfiles = bytes / filesize;
 	bytes %= filesize;
 	char filename[10];
@@ -187,6 +199,7 @@ void readback(uint64_t bytes, uint64_t filesize)
 	progress(1, 1.0);
 	fclose(destfile);
 	remove(filename);
+	if((time(NULL) - start) != 0) readspeed = bytes_time/(time(NULL) - start);
 }
 
 void cycle(uint64_t bytes, uint64_t filesize)
