@@ -18,7 +18,7 @@ struct sigaction old_action;
 
 void filefailure(void)
 {
-	printf("\n\nfatal I/O error, terminating\n\n");
+	printf("\n\nfatal I/O error, terminating...\n\n");
 	exit(1);
 }
 
@@ -147,7 +147,6 @@ void fill(uint64_t bytes, uint64_t filesize, char * path)
 		fclose(destfile);
 		progress(0, (double)i/nfiles);
 	}
-	/*writing remaining data*/
 	sprintf(filename, "%s/%i.dat",path,nfiles);
 	FILE* destfile = fopen(filename, "wb");
 	if(destfile == NULL) filefailure();
@@ -181,7 +180,7 @@ void readback(uint64_t bytes, uint64_t filesize , char * path)
 	char filename[300];
 	uint32_t readbuf[256];
 	uint32_t genbuf[256];
-	for(int i = 0; i < nfiles; i++) /*writing 32MiB files*/
+	for(int i = 0; i < nfiles; i++)
 	{
 		sprintf(filename, "%s/%i.dat",path,i);
 		FILE* destfile = fopen(filename, "rb");
@@ -199,7 +198,6 @@ void readback(uint64_t bytes, uint64_t filesize , char * path)
 		remove(filename);
 		progress(1, (double)i/nfiles);
 	}
-	/*writing remaining data*/
 	sprintf(filename, "%s/%i.dat",path,nfiles);
 	FILE* destfile = fopen(filename, "rb");
 	if(destfile == NULL) filefailure();
@@ -232,7 +230,7 @@ void savelog(time_t startrun, FILE * logfile)
 		passage, rspeedstr, wspeedstr, tbwstr, ioerrors , mmerrstr, time(NULL) - startrun); fflush(logfile);
 }
 
-void cycle(uint64_t bytes, uint64_t filesize, time_t startrun, char * path, FILE * logfile)
+void cycle(uint64_t bytes, uint64_t filesize, time_t startrun, char * path, FILE * logfile, int singlerun)
 {
 	for(passage = 1; !shutdown; passage++) 
 	{
@@ -241,6 +239,7 @@ void cycle(uint64_t bytes, uint64_t filesize, time_t startrun, char * path, FILE
 		reseed(passage);
 		readback(bytes, filesize, path);
 		savelog(startrun, logfile);	
+		if(singlerun) break;
 	}
 }
 
@@ -256,17 +255,47 @@ int main(int argc, char ** argv)
 	sigemptyset(&sigIntHandler.sa_mask);
 	sigIntHandler.sa_flags = 0;
 	sigaction(SIGINT, &sigIntHandler, NULL);
-	uint64_t bytes = tobytes(argv[2]);
-	uint64_t filesize = 32*1024*1024;
-	if(argc == 4) filesize = tobytes(argv[3]);
 	char path[300];
-	strcpy(path,argv[1]);
+	uint64_t bytes;
+	uint64_t filesize = 32*1024*1024;
 	time_t startrun = time(NULL);
 	char logname[20];
+	int singlerun = 0;
+	printf("\n\nUsage: -d <path> -s <size[kKmMgGtT]> [-b <size[kKmMgGt]>]  [-o]");
+	printf("\n -d -- path to test destination");
+	printf("\n -s -- total file size")
+	printf("\n -b -- size of files, rounded to 1kiB");
+	printf("\n -o -- single cycle (for read/write speed measurement only)\n");
+	if(argc < 3) exit(1);
+	for(int i = 0; i < argc; i++)
+	{	
+		if(strcmp(argv[i],"-d") == 0) 
+		{
+			if(i + 1 == argc) 
+				exit(1);
+			else 
+				strcpy(path,argv[i + 1]);
+		}
+		if(strcmp(argv[i],"-s") == 0) 
+		{
+			if((i + 1 == argc)) 
+				exit(1);
+			else 
+				bytes = tobytes(argv[i + 1]);
+		}
+		if(strcmp(argv[i],"-b") == 0) 
+		{
+			if((i + 1 == argc)) 
+				exit(1);
+			else 
+				filesize = tobytes(argv[i + 1]);
+		}
+		if(strcmp(argv[i],"-o") == 0) 
+			singlerun = 1;
+	}
 	sprintf(logname, "test%i.log", startrun);
-	printf("\n\nUsage: <path> <total size of written files[kKmMgGtT]> [<size of written blocks[kKmMgGt]>]\n\n");
 	FILE *logfile = fopen(logname, "w");
-	cycle(bytes, filesize, startrun, path, logfile);
+	cycle(bytes, filesize, startrun, path, logfile, singlerun);
 	printf("\n");
 	fclose(logfile);
 	return 0;
