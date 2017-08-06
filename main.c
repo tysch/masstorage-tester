@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
 #include <time.h>
 #include <string.h>
@@ -226,13 +227,13 @@ void savelog(time_t startrun, FILE * logfile)
 	bytestostr(mismatcherrors,mmerrstr);
 	bytestostr(readspeed,rspeedstr);
 	bytestostr(writespeed,wspeedstr);
-	fprintf(logfile,"Passage = %-9i read = %9s/s write = %9s/s TBW = %-8s   I/O errors = %-18llu data errors = %-10s time = %9is \n" , 
+	fprintf(logfile,"Passage = %-9i read = %9s/s write = %9s/s TBW = %-8s   I/O errors = %-18llu data errors = %-10s time = %llis \n" , 
 		passage, rspeedstr, wspeedstr, tbwstr, ioerrors , mmerrstr, time(NULL) - startrun); fflush(logfile);
 }
 
 void cycle(uint64_t bytes, uint64_t filesize, time_t startrun, char * path, FILE * logfile, int singlerun)
 {
-	for(passage = 1; !shutdown; passage++) 
+	for(; !shutdown; passage++) 
 	{
 		reseed(passage);
 		fill(bytes, filesize, path);
@@ -255,18 +256,30 @@ int main(int argc, char ** argv)
 	sigemptyset(&sigIntHandler.sa_mask);
 	sigIntHandler.sa_flags = 0;
 	sigaction(SIGINT, &sigIntHandler, NULL);
-	char path[300];
+	char path[1024];
 	uint64_t bytes;
 	uint64_t filesize = 32*1024*1024;
 	time_t startrun = time(NULL);
 	char logname[20];
 	int singlerun = 0;
-	printf("\n\nUsage: -d <path> -s <size[kKmMgGtT]> [-b <size[kKmMgGt]>]  [-o]");
-	printf("\n -d -- path to test destination");
-	printf("\n -s -- total file size")
-	printf("\n -b -- size of files, rounded to 1kiB");
-	printf("\n -o -- single cycle (for read/write speed measurement only)\n");
-	if(argc < 3) exit(1);
+	int singleread = 0;
+	int singlewrite = 0;
+	int cycling = 0;
+	if(argc < 3) 
+	{
+		printf("\n\nUsage: -d <path> -s <size[kKmMgGtT]> [-b <size[kKmMgGt]>]  [-o|r|w|c] [-i <salt>]");
+		printf("\n -d -- path to test destination");
+		printf("\n -s -- total file size");
+		printf("\n -b -- size of files, rounded to 1kiB");
+		printf("\n -o -- single read/write cycle, for speed measurement)");
+		printf("\n -c -- continuous read/write cycling, for endurance tests");
+		printf("\n -w -- single write only");
+		printf("\n -r -- single read only");
+		printf("\n -w, -r are useful for long term data retention tests");
+		printf("\n           -w and -r must be launched with the same");
+		printf("\n -i -- integer salt for random data being written, default 1");
+		exit(1);
+	}
 	for(int i = 0; i < argc; i++)
 	{	
 		if(strcmp(argv[i],"-d") == 0) 
@@ -288,14 +301,41 @@ int main(int argc, char ** argv)
 			if((i + 1 == argc)) 
 				exit(1);
 			else 
-				filesize = tobytes(argv[i + 1]);
+				filesize = (uint64_t)(1024*(tobytes(argv[i + 1])/1024.0));
+		}
+		if(strcmp(argv[i],"-i") == 0) 
+		{
+			if((i + 1 == argc)) 
+				exit(1);
+			else 
+				sscanf(argv[i + 1], "%i", &passage);
 		}
 		if(strcmp(argv[i],"-o") == 0) 
 			singlerun = 1;
+		if(strcmp(argv[i],"-c") == 0) 
+			cycling = 1;
+		if(strcmp(argv[i],"-w") == 0) 
+			singlewrite = 1;
+		if(strcmp(argv[i],"-r") == 0) 
+			singleread = 1;
 	}
 	sprintf(logname, "test%i.log", startrun);
 	FILE *logfile = fopen(logname, "w");
-	cycle(bytes, filesize, startrun, path, logfile, singlerun);
+	for(int i = 0; i < argc; i++) fprintf(logfile,"%s ",argv[i]);
+	fprintf(logfile,"\n\n");
+	if(singlewrite) 	
+	{
+		reseed(passage);
+		fill(bytes, filesize, path);
+		savelog(startrun, logfile);
+	}
+	if(singleread) 	
+	{
+		reseed(passage);
+		readback(bytes, filesize, path);
+		savelog(startrun, logfile);
+	}
+	if(cycling || singlerun) cycle(bytes, filesize, startrun, path, logfile, singlerun);
 	printf("\n");
 	fclose(logfile);
 	return 0;
