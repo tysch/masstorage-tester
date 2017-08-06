@@ -5,19 +5,22 @@
 #include <signal.h>
 #include <unistd.h>
 
-uint64_t totalbyteswritten;
-uint64_t mismatcherrors;
-uint64_t ioerrors;
-uint32_t passage;
+uint64_t totalbyteswritten = 0;
+uint64_t mismatcherrors = 0;
+uint64_t ioerrors = 0;
+uint32_t passage = 1;
 uint64_t writespeed;
 uint64_t readspeed;
-FILE* logfile;
-char path[300];
-time_t startrun;
 
 volatile int shutdown = 0;
 
 struct sigaction old_action;
+
+void filefailure(void)
+{
+	printf("\n\nfatal I/O error, terminating\n\n");
+	exit(1);
+}
 
 uint32_t state0;
 uint32_t state1;
@@ -120,7 +123,7 @@ void progress(int flag, double percent)
 	fflush(stdout);
 }
 
-void fill(uint64_t bytes, uint64_t filesize)
+void fill(uint64_t bytes, uint64_t filesize, char * path)
 { 
 	time_t start = time(NULL);
 	uint64_t bytes_time = bytes;
@@ -132,6 +135,7 @@ void fill(uint64_t bytes, uint64_t filesize)
 	{
 		sprintf(filename, "%s/%i.dat",path,i);
 		FILE* destfile = fopen(filename, "wb");
+		if(destfile == NULL) filefailure();
 		for(int j = 0; j < filesize/1024;j++)
 		{
 			for(int k = 0; k < 256; k++)
@@ -146,6 +150,7 @@ void fill(uint64_t bytes, uint64_t filesize)
 	/*writing remaining data*/
 	sprintf(filename, "%s/%i.dat",path,nfiles);
 	FILE* destfile = fopen(filename, "wb");
+	if(destfile == NULL) filefailure();
 	for(int i = 0; i < (bytes / 1024);i++)
 	{
 		for(int j = 0; j < 256; j++)
@@ -167,7 +172,7 @@ void cmpbuf(uint32_t * buf1, uint32_t * buf2)
 	}
 }
 
-void readback(uint64_t bytes, uint64_t filesize)
+void readback(uint64_t bytes, uint64_t filesize , char * path)
 { 
 	time_t start = time(NULL);
 	uint64_t bytes_time = bytes;
@@ -180,6 +185,7 @@ void readback(uint64_t bytes, uint64_t filesize)
 	{
 		sprintf(filename, "%s/%i.dat",path,i);
 		FILE* destfile = fopen(filename, "rb");
+		if(destfile == NULL) filefailure();
 		for(int j = 0; j < filesize/1024;j++)
 		{
 			for(int k = 0; k < 256; k++)
@@ -196,6 +202,7 @@ void readback(uint64_t bytes, uint64_t filesize)
 	/*writing remaining data*/
 	sprintf(filename, "%s/%i.dat",path,nfiles);
 	FILE* destfile = fopen(filename, "rb");
+	if(destfile == NULL) filefailure();
 	for(int i = 0; i < (bytes / 1024);i++)
 	{
 		for(int j = 0; j < 256; j++)
@@ -211,7 +218,7 @@ void readback(uint64_t bytes, uint64_t filesize)
 	if((time(NULL) - start) != 0) readspeed = bytes_time/(time(NULL) - start);
 }
 
-void savelog(void)
+void savelog(time_t startrun, FILE * logfile)
 {
 	char tbwstr[20];
 	char mmerrstr[20];
@@ -225,20 +232,20 @@ void savelog(void)
 		passage, rspeedstr, wspeedstr, tbwstr, ioerrors , mmerrstr, time(NULL) - startrun); fflush(logfile);
 }
 
-void cycle(uint64_t bytes, uint64_t filesize)
+void cycle(uint64_t bytes, uint64_t filesize, time_t startrun, char * path, FILE * logfile)
 {
 	for(passage = 1; !shutdown; passage++) 
 	{
 		reseed(passage);
-		fill(bytes, filesize);
+		fill(bytes, filesize, path);
 		reseed(passage);
-		readback(bytes, filesize);
-		savelog();	
+		readback(bytes, filesize, path);
+		savelog(startrun, logfile);	
 	}
 }
 
 void sigint_handler(int s){
-           printf("Caught signal %d\n",s);
+           printf("\n\nCTRL+C detected, shutting down..\n\n");
            shutdown = 1;
 }
 
@@ -249,29 +256,18 @@ int main(int argc, char ** argv)
 	sigemptyset(&sigIntHandler.sa_mask);
 	sigIntHandler.sa_flags = 0;
 	sigaction(SIGINT, &sigIntHandler, NULL);
-	uint64_t bytes;
+	uint64_t bytes = tobytes(argv[2]);
 	uint64_t filesize = 32*1024*1024;
-	startrun = time(NULL);
+	if(argc == 4) filesize = tobytes(argv[3]);
+	char path[300];
+	strcpy(path,argv[1]);
+	time_t startrun = time(NULL);
 	char logname[20];
 	sprintf(logname, "test%i.log", startrun);
 	printf("\n\nUsage: <path> <total size of written files[kKmMgGtT]> [<size of written blocks[kKmMgGt]>]\n\n");
-	if(logfile = fopen(logname, "r+"))
-	{
-		//fscanf(logfile, "Passage = %-9i read = %9s/s write = %9s/s TBW = %-8s   I/O errors = %-18llu data errors = %-10s time = %9is \n")
-	}
-	else
-	{
-		logfile = fopen(logname, "w");
-		bytes = tobytes(argv[2]);
-		if(argc == 4) filesize = tobytes(argv[3]);
-		strcpy(path,argv[1]);
-		totalbyteswritten = 0;
-		mismatcherrors = 0;
-		ioerrors = 0;
-		passage = 1;
-	}
-	cycle(bytes, filesize);
+	FILE *logfile = fopen(logname, "w");
+	cycle(bytes, filesize, startrun, path, logfile);
+	printf("\n");
 	fclose(logfile);
 	return 0;
 }
-
