@@ -265,7 +265,7 @@ int main(int argc, char ** argv)
 	int singleread = 0;
 	int singlewrite = 0;
 	int cycling = 0;
-	if(argc < 3) 
+	if(argc < 6) 
 	{
 		printf("\n\nUsage: -d <path> -s <size[kKmMgGtT]> [-b <size[kKmMgGt]>]  [-o|r|w|c] [-i <salt>]");
 		printf("\n -d -- path to test destination");
@@ -277,7 +277,7 @@ int main(int argc, char ** argv)
 		printf("\n -r -- single read only");
 		printf("\n -w, -r are useful for long term data retention tests");
 		printf("\n           -w and -r must be launched with the same");
-		printf("\n -i -- integer salt for random data being written, default 1");
+		printf("\n -i -- integer salt for random data being written, default 1\n");
 		exit(1);
 	}
 	for(int i = 0; i < argc; i++)
