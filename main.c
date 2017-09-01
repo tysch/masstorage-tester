@@ -59,6 +59,7 @@ enum prmode
 enum printmode
 {
 	count,
+	size,
 	rspeed,
 	wspeed,
 	tbw,
@@ -93,6 +94,7 @@ void bytestostr(uint64_t bytes, char * str)
 // Replace scattered prints with a lots of global variables
 void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 {
+	static char status;
 	static uint64_t totalbyteswritten;
 	static uint64_t mismatcherrors;
 	static uint64_t ioerrors;
@@ -101,11 +103,11 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 	static uint64_t readspeed;
 	static uint64_t readbytes;
 	static uint64_t writebytes;
+	static uint64_t sizewritten;
 	static time_t startrun;
 	static time_t elapsed;
 	static double percent;
 
-	static char status[10];
 	static char tbwstr[20];
 	static char readstr[20];
 	static char writestr[20];
@@ -113,11 +115,20 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 	static char mmerrstr[20];
 	static char rspeedstr[20];
 	static char wspeedstr[20];
+	static char sizestr[20];
+
+	const readrun = 1;
+	const writerun = 2;
 
 	switch(prflag)
 	{
 		case count:
 			passage++;
+			break;
+		case size:
+			sizewritten = val;
+			bytestostr(sizewritten, sizestr);
+			printf("\nactual device size is %s\n", sizestr);
 			break;
 		case rspeed:
 			readspeed = val;
@@ -152,13 +163,15 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 			bytestostr(writebytes, writestr);
 			break;
 		case readp:
-			strcpy(status, "read");
+			status = readrun;
 			break;
 		case writep:
-			strcpy(status, "write");
+			status = writerun;
 			break;
 		case reset:
 			passage = 1;
+			sizewritten = 0;
+			bytestostr(sizewritten, sizestr);
 			readspeed = 0;
 			bytestostr(readspeed,rspeedstr);
 			writespeed = 0;
@@ -177,13 +190,13 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 			startrun = time(NULL);
 			break;
 		case log:
-			if(strcmp(status, "write") == 0)
+			if(status == writerun)
 			{
 				fprintf(logfile,
 				"\nPassage = %-9i%-3.3f%% write = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
 				passage, percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr, time(NULL) - startrun);
 			}
-			if(strcmp(status, "read") == 0)
+			if(status == readrun)
 			{
 				fprintf(logfile,
 				"\nPassage = %-9i%-3.3f%% read = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
@@ -191,14 +204,14 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 			}
 			/*Intentionally left no break statement*/
 		case print:
-			if(strcmp(status, "write") == 0)
+			if(status == writerun)
 			{
 				printf("                    ");
 				printf(
 				"\rPassage = %-9i%-3.3f%% write = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
 				passage, percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr, time(NULL) - startrun);
 			}
-			if(strcmp(status, "read") == 0)
+			if(status == readrun)
 			{
 				printf("                    ");
 				printf(
@@ -274,7 +287,7 @@ void writeseedandsize (char * buf, uint32_t bufsize, uint32_t seed, uint64_t siz
 // Recovers seed and size information from buffer
 int32_t readseedandsize (char * buf, uint32_t bufsize, uint32_t *seed, uint64_t *size)
 {
-	// |32-bit seed | 32-bit seed | 64-bit size || 32-bit seed | 32-bit seed | 64-bit size |...
+	// |64-bit seed | 64-bit size |64-bit seed | 64-bit size |...
 	uint32_t bitcount[128] = {0};
 	char rcblock[16] = {0};
 	uint64_t * ptr;
@@ -301,10 +314,11 @@ int32_t readseedandsize (char * buf, uint32_t bufsize, uint32_t *seed, uint64_t 
 				rcblock[i] |= 1 << j;
 			if(bitcount[8*i + j] == (bufsize / (16*2))) // unrecoverable data condition
 				return -1;
+			/*
 			if(rcblock[i] & (1 << j)) // majority are 1es
 				errcount += (bufsize - bitcount[8*i + j]); // 0es are errors
 			if(!(rcblock[i] & (1 << j))) // majority is 0
-				errcount += bitcount[8*i + j]; // 1es are errors
+				errcount += bitcount[8*i + j]; // 1es are errors*/
 		}
 	}
 	// stripping 128-bit block for seed and size values
@@ -312,12 +326,19 @@ int32_t readseedandsize (char * buf, uint32_t bufsize, uint32_t *seed, uint64_t 
 	*seed = (uint32_t)*ptr;
 	ptr = (uint64_t *)(rcblock + sizeof(uint64_t));
 	*size = *ptr;
+	// counting read mismatches
+	ptr = (uint64_t *)buf;
+	for(uint32_t i = 0; i < bufsize; i += 16)
+	{
+		if((uint32_t)(*ptr) != *seed)  errcount += 8;
+		ptr++;
+		if(*ptr != *size) errcount += 8;
+		ptr++;
+	}
 	return errcount;
 }
 
 //
-
-
 
 
 
@@ -342,7 +363,7 @@ uint64_t fillfile(char * path, char *buf, uint32_t seed, uint32_t bufsize, FILE 
 	while(1)
 	{
 		if(stop_all) break;
-		fillbuf(buf, bufsize);
+		//fillbuf(buf, bufsize);
 		if(firstcycle)
 		{
 			firstcycle = 0;
@@ -353,6 +374,9 @@ uint64_t fillfile(char * path, char *buf, uint32_t seed, uint32_t bufsize, FILE 
 						}
 			continue;
 		}
+
+		fillbuf(buf, bufsize);
+
 		ret = write (fd, buf, bufsize);
 		if (ret == -1)
 		{
@@ -363,6 +387,7 @@ uint64_t fillfile(char * path, char *buf, uint32_t seed, uint32_t bufsize, FILE 
 				break;
 			}
 		}
+
 		byteswritten += ret;
 		/* Progress print section */
 		if(prevbyteswritten)
@@ -373,28 +398,11 @@ uint64_t fillfile(char * path, char *buf, uint32_t seed, uint32_t bufsize, FILE 
 			printprogress(wspeed, byteswritten / (time(NULL) - startrun), logfile);
 		printprogress(print, 0, logfile);
 		if(ret < bufsize) break;
-if(byteswritten > 50*1000*1000) break; // simulating smaller size
+//if(byteswritten > 50*1000*1000) break; // simulating smaller size
 	}
-/*
 
-	 rewind to the beginning
-	if(lseek(fd, 0, SEEK_SET))
-	{
-		printf("\ndevice seek failure!\n");
-		if(islogging) fprintf(logfile, "\ndevice seek failure!");
-	}*/
 
 	writeseedandsize(buf, bufsize, seed, byteswritten);
-	/*ret = write (fd, buf, bufsize);
-	if (ret == -1)
-	{
-		if((errno == EINVAL) && (errno == EIO) && (errno == ENOSPC))
-		{
-			printf("\ndevice write failure\n");
-			if(islogging) fprintf(logfile, "\ndevice write failure");
-			goto brk;
-		}
-	}*/
 	pwrite (fd, buf, bufsize, 0);
 
 	if(close(fd) == -1)
@@ -406,20 +414,56 @@ if(byteswritten > 50*1000*1000) break; // simulating smaller size
 	if(!prevbyteswritten)
 	{
 		prevbyteswritten = byteswritten;
-		bytestostr(byteswritten, sizestr);
-		printf("\nactual device size is %s\n", sizestr);
-		if(islogging) fprintf(logfile, "\nactual device size is %s\n", sizestr);
+		printprogress(size, byteswritten, logfile);
 	}
 	return byteswritten;
 }
 
+/* partial read tolerant code */
+
+
+uint32_t fileread(int fd, char * buf, uint32_t bufsize , FILE * logfile, int islogging)
+{
+	ssize_t ret;
+	uint32_t bufread = 0;
+
+	if(fd == -1)
+	{
+		printf("\nDevice access error!\n");
+		if(islogging) fprintf(logfile, "\nDevice access error!\n");
+		exit(1);
+	}
+	while (bufsize != 0 && (ret = read (fd, buf, bufsize)) != 0)
+	{
+		if(stop_all) break;
+		if (ret == -1)
+		{
+			if (errno == EINTR)
+				continue;
+			printf("\nDevice read error!\n");
+			if(islogging) fprintf(logfile, "\nDevice read error!\n");
+			break;
+		}
+		bufsize -= ret;
+		buf += ret;
+		bufread += ret;
+	}
+	return bufread;
+}
+
+
+
+
+
+
 void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t byteswritten , int islogging)
 {
 	uint64_t bytesread = 0;
-	ssize_t ret, len , bufread;
+	ssize_t bufread;
 	uint32_t seed;
 	time_t startrun = time(NULL);
 	int firstcycle = 1;
+	uint32_t errcnt = 0;
 	char * tmpptr;
 	char rdstr[20];
 	int fd = open(path, O_RDONLY);
@@ -430,43 +474,24 @@ void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t
 		if(islogging) fprintf(logfile, "\nDevice access error!\n");
 		exit(1);
 	}
-	while(1)
-	{
 
-		if(stop_all) break;
-		len = bufsize;
-		tmpptr = buf;
-		bufread = 0;
-		/* partial read tolerant code */
-		while (len != 0 && (ret = read (fd, tmpptr, len)) != 0)
-		{
-			if (ret == -1)
-			{
-				if (errno == EINTR)
-					continue;
-				printf("\nDevice read error!\n");
-				if(islogging) fprintf(logfile, "\nDevice read error!\n");
-				break;
-			}
-			len -= ret;
-			tmpptr += ret;
-			bytesread += ret;
-			bufread += ret;
-		}
+	while (!stop_all)
+	{
+		bufread = fileread(fd, buf, bufsize , logfile, islogging);
+		bytesread += bufread;
 		/* Progress print section */
 		printprogress(readb, bytesread, logfile);
 
 		if(firstcycle)
 		{
 			firstcycle = 0;
-			readseedandsize(buf, bufread, &seed, &byteswritten);
+			errcnt = readseedandsize(buf, bufread, &seed, &byteswritten);
+			printprogress(mmerr, errcnt, logfile);
 			printf("\n\n seed = %i size = %lli from readback\n\n", seed, byteswritten);
 			reseed(seed);
-			chkbuf(buf, bufsize); //
+			//chkbuf(buf, bufsize); //
 			continue;
 		}
-
-
 		printprogress(mmerr, chkbuf(buf, bufread), logfile);
 
 		if(byteswritten)
@@ -474,8 +499,10 @@ void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t
 		if(time(NULL) - startrun)
 			printprogress(rspeed, bytesread / (time(NULL) - startrun), logfile);
 		printprogress(print, 0, logfile);
-		if(len > 0)	break;
+
+		if (bufread < bufsize) break;
 	}
+
 	bytestostr(bytesread, rdstr);
 	printf("\nRead back %s of data\n", rdstr);
 	if(islogging) fprintf(logfile, "\nRead back %s of data\n", rdstr);
@@ -673,7 +700,7 @@ int main(int argc, char ** argv)
 			cycle_f(path, buf, bufsize, seed, logfile, islogging);
 			break;
 	}
-	fclose(logfile);
+	if(islogging) fclose(logfile);
 	free(buf);
 	return 0;
 }
