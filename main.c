@@ -10,6 +10,118 @@
 #include <fcntl.h>
 #include <errno.h>
 
+
+struct fecblock
+{
+	uint64_t errcnt;
+	uint64_t errcntmax;
+	uint64_t blocksize;
+};
+
+int nblocksizes;
+
+struct fecblock * fectest_init(uint64_t byteswritten, uint64_t *pos , int *nblocksizes)
+{
+	uint64_t bsize = 512;
+	struct fecblock * fecblocks;
+	*pos = 0;
+	for(uint64_t i = bsize; i < byteswritten; i *= 2) (*nblocksizes)++;
+	fecblocks = malloc(sizeof(struct fecblock) * (*nblocksizes));
+	for(int i = 0; i < (*nblocksizes); i++)
+	{
+		fecblocks[i].blocksize = bsize;
+		fecblocks[i].errcnt = 0;
+		fecblocks[i].errcntmax = 0;
+		bsize *= 2;
+	}
+	return fecblocks;
+}
+
+void fecsize_test(struct fecblock * fecblocks, int nerror, uint64_t *pos, int nblocksizes)
+{
+	*pos += 4;
+
+	for(int i = 0; i < nblocksizes; i++)
+	{
+		fecblocks[i].errcnt += nerror;
+
+		if(*pos % fecblocks[i].blocksize)
+		{
+			if(fecblocks[i].errcntmax < fecblocks[i].errcnt)
+				fecblocks[i].errcntmax = fecblocks[i].errcnt;
+
+			fecblocks[i].errcnt = 0;
+		}
+	}
+}
+
+void readseedandsize_fectest (char * buf, uint32_t bufsize, uint32_t *seed, uint64_t *size, struct fecblock * fecblocks, uint64_t *pos, int nblocksizes)
+{
+	uint64_t * ptr = (uint64_t *) buf;
+	for(uint32_t i = 0; i < bufsize; i += 16)
+	{
+		if((uint32_t)(*ptr) != *seed)
+		{
+			fecsize_test(fecblocks, 4, pos, nblocksizes);
+			fecsize_test(fecblocks, 4, pos, nblocksizes);
+		}
+		else
+		{
+			fecsize_test(fecblocks, 0, pos, nblocksizes);
+			fecsize_test(fecblocks, 0, pos, nblocksizes);
+		}
+
+		ptr++;
+
+		if(*ptr != *size)
+		{
+			fecsize_test(fecblocks, 4, pos, nblocksizes);
+			fecsize_test(fecblocks, 4, pos, nblocksizes);
+		}
+		else
+		{
+			fecsize_test(fecblocks, 0, pos, nblocksizes);
+			fecsize_test(fecblocks, 0, pos, nblocksizes);
+		}
+		ptr++;
+	}
+}
+
+
+void print_fec_summary(struct fecblock * fecblocks, int nblocksizes, FILE * logfile, int islogging)
+{
+	uint64_t nblocksize;
+	uint64_t nerr;
+	uint64_t sparebytes;
+	double overhead;
+	char bsstr[20];
+	char sbstr[20];
+	printf("\n Forward error correction code requirements:\n");
+
+
+	for(int i = 0; i < nblocksizes; i++)
+	{
+		nerr = fecblocks[i].errcntmax;
+		nblocksize = fecblocks[i].blocksize;
+		bytestostr(nblocksize, bsstr);
+		if(nerr > nblocksize / 2)
+		{
+			printf("block size: %-12s -- insufficient block size\n", bsstr);
+			if(islogging)
+				fprintf(logfile, "block size: %-12s -- insufficient block size\n", bsstr);
+		}
+		else
+		{
+			sparebytes = nblocksize - 2 * nerr;
+			bytestostr(sparebytes, sbstr);
+			overhead = 100.0 * (double) sparebytes / nblocksize;
+			printf("block size: %-12s  spare bytes: %-12s   overhead: %.2f%%\n", bsstr, sbstr, overhead);
+			if(islogging)
+				fprintf(logfile, "block size: %-12s  spare bytes: %-12s   overhead: %.2f%%\n", bsstr, sbstr, overhead);
+		}
+	}
+}
+
 // Pseudorandom number generator state variables
 uint32_t state0;
 uint32_t state1;
@@ -117,8 +229,8 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 	static char wspeedstr[20];
 	static char sizestr[20];
 
-	const readrun = 1;
-	const writerun = 2;
+	const int readrun = 1;
+	const int writerun = 2;
 
 	switch(prflag)
 	{
@@ -194,13 +306,17 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 			{
 				fprintf(logfile,
 				"\nPassage = %-9i%-3.3f%% write = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
-				passage, percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr, time(NULL) - startrun);
+				(int) passage,
+				percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr,
+				(long long int) (time(NULL) - startrun));
 			}
 			if(status == readrun)
 			{
 				fprintf(logfile,
 				"\nPassage = %-9i%-3.3f%% read = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
-				passage, percent, readstr, rspeedstr, tbwstr, ioerrstr , mmerrstr, time(NULL) - startrun);
+				(int) passage,
+				percent, readstr, rspeedstr, tbwstr, ioerrstr , mmerrstr,
+				(long long int) (time(NULL) - startrun));
 			}
 			/*Intentionally left no break statement*/
 		case print:
@@ -209,14 +325,18 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 				printf("                    ");
 				printf(
 				"\rPassage = %-9i%-3.3f%% write = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
-				passage, percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr, time(NULL) - startrun);
+				(int) passage,
+				percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr,
+				(long long int) (time(NULL) - startrun));
 			}
 			if(status == readrun)
 			{
 				printf("                    ");
 				printf(
 				"\rPassage = %-9i%-3.3f%% read = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
-				passage, percent, readstr, rspeedstr, tbwstr, ioerrstr , mmerrstr, time(NULL) - startrun);
+				(int) passage,
+				percent, readstr, rspeedstr, tbwstr, ioerrstr , mmerrstr,
+				(long long int) (time(NULL) - startrun));
 			}
 			fflush(stdout);
 			break;
@@ -258,14 +378,23 @@ void fillbuf(char * buf, uint32_t bufsize)
 }
 
 // Compares buffer data with a generated random values and counts read mismatches
-uint32_t chkbuf(char * buf, uint32_t bufsize)
+uint32_t chkbuf(char * buf, uint32_t bufsize, struct fecblock * fecblocks, uint64_t *fpos, int nblocksizes, int isfectesting)
 {
 	uint32_t * ptr;
 	uint32_t nerr = 0;
+	uint32_t err_curr;
 	for(uint32_t i = 0; i < bufsize; i += 4)
 	{
 		ptr = (uint32_t *)(buf + i);
-		if((*ptr) != xorshift128()) nerr += 4;
+		err_curr = ((*ptr) - xorshift128());
+		if(err_curr != 0) nerr += 4;
+		if(isfectesting)
+		{
+			if((err_curr != 0))
+				fecsize_test(fecblocks, 4, fpos, nblocksizes);
+			else
+				fecsize_test(fecblocks, 0, fpos, nblocksizes);
+		}
 	}
 	return nerr;
 }
@@ -322,7 +451,7 @@ int32_t readseedandsize (char * buf, uint32_t bufsize, uint32_t *seed, uint64_t 
 		}
 	}
 	// stripping 128-bit block for seed and size values
-	ptr = (uint32_t *)rcblock;
+	ptr = (uint64_t *)rcblock;
 	*seed = (uint32_t)*ptr;
 	ptr = (uint64_t *)(rcblock + sizeof(uint64_t));
 	*size = *ptr;
@@ -339,9 +468,6 @@ int32_t readseedandsize (char * buf, uint32_t bufsize, uint32_t *seed, uint64_t 
 }
 
 //
-
-
-
 
 uint64_t fillfile(char * path, char *buf, uint32_t seed, uint32_t bufsize, FILE * logfile , int islogging)
 {
@@ -421,7 +547,6 @@ uint64_t fillfile(char * path, char *buf, uint32_t seed, uint32_t bufsize, FILE 
 
 /* partial read tolerant code */
 
-
 uint32_t fileread(int fd, char * buf, uint32_t bufsize , FILE * logfile, int islogging)
 {
 	ssize_t ret;
@@ -453,10 +578,7 @@ uint32_t fileread(int fd, char * buf, uint32_t bufsize , FILE * logfile, int isl
 
 
 
-
-
-
-void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t byteswritten , int islogging)
+void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t byteswritten , int islogging, int isfectesting)
 {
 	uint64_t bytesread = 0;
 	ssize_t bufread;
@@ -466,6 +588,14 @@ void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t
 	uint32_t errcnt = 0;
 	char * tmpptr;
 	char rdstr[20];
+
+	struct fecblock * fecblocks;
+	int nblocksizes = 0;
+	uint64_t fpos = 0;
+
+	uint32_t nerr;
+
+
 	int fd = open(path, O_RDONLY);
 
 	if(fd == -1)
@@ -487,12 +617,19 @@ void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t
 			firstcycle = 0;
 			errcnt = readseedandsize(buf, bufread, &seed, &byteswritten);
 			printprogress(mmerr, errcnt, logfile);
-			printf("\n\n seed = %i size = %lli from readback\n\n", seed, byteswritten);
+			printf("\n\n seed = %i size = %lli from readback\n\n", (int) seed, (long long int) byteswritten);
 			reseed(seed);
 			//chkbuf(buf, bufsize); //
+
+			if(isfectesting)
+			{
+				fecblocks = fectest_init(byteswritten, &fpos , &nblocksizes);
+				readseedandsize_fectest(buf, bufsize, &seed, &byteswritten, fecblocks, &fpos, nblocksizes);
+			}
 			continue;
 		}
-		printprogress(mmerr, chkbuf(buf, bufread), logfile);
+		nerr = chkbuf(buf, bufread, fecblocks, &fpos, nblocksizes, isfectesting);
+		printprogress(mmerr, nerr, logfile);
 
 		if(byteswritten)
 			printprogress(perc, (uint64_t)(1000000.0*((double)bytesread / byteswritten)), logfile);
@@ -514,6 +651,10 @@ void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t
 	}
 
 	if(islogging) printprogress(log, 0, logfile);
+
+	if(isfectesting) print_fec_summary(fecblocks, nblocksizes, logfile, islogging);
+	if(isfectesting) free(fecblocks);
+
 }
 
 void print_usage(int arg)
@@ -530,6 +671,8 @@ void print_usage(int arg)
 		printf("\n           -w and -r must be launched with the same salt");
 		printf("\n -i -- integer salt for random data being written, default 1\n");
 		printf("\n -l -- write a log file\n");
+		printf("\n -f -- estimates forward error correction techniques requirements ");
+		printf("(i.e. Reed-Solomon) to handle errors being countered\n");
 		exit(1);
 	}
 	if(getuid())
@@ -539,7 +682,7 @@ void print_usage(int arg)
 	}
 }
 
-void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , int *islogging)
+void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , int *islogging, int *isfectesting)
 {
 	for(int i = 0; i < argc; i++)
 	{
@@ -560,6 +703,10 @@ void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , int *i
 		if(strcmp(argv[i],"-l") == 0)
 		{
 			*islogging = 1;
+		}
+		if(strcmp(argv[i],"-f") == 0)
+		{
+			*isfectesting = 1;
 		}
 	}
 }
@@ -610,7 +757,7 @@ void log_init(int argc, char ** argv, FILE **logfileptr)
 	struct tm * timeinfo;
 	time_t startrun = time(NULL);
 	time_t rawtime;
-	sprintf(logname, "test-%lli.log", startrun);
+	sprintf(logname, "test-%lli.log", (long long int) startrun);
 	*logfileptr = fopen(logname, "w+");
 	if(*logfileptr == NULL)
 	{
@@ -633,16 +780,17 @@ void singlewrite_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FIL
 	fillfile(path, buf, seed, bufsize, logfile , islogging);
 }
 
-void singleread_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FILE * logfile , int islogging)
+void singleread_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FILE * logfile , int islogging, int isfectesting)
 {
 	//reseed(seed);
 	printprogress(reset, 0, logfile);
 	printprogress(readp, 0, logfile);
-	readback(path, buf, bufsize, logfile, 0 , islogging);
+
+	readback(path, buf, bufsize, logfile, 0 , islogging, isfectesting);
 }
 
 
-void cycle_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FILE * logfile , int islogging)
+void cycle_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FILE * logfile , int islogging, int isfectesting)
 {
 	uint64_t byteswritten;
 	printprogress(reset, 0, logfile);
@@ -654,7 +802,7 @@ void cycle_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FILE * lo
 		if(stop_all) break;
 		//reseed(seed);
 		printprogress(readp, 0, logfile);
-		readback(path, buf, bufsize, logfile, byteswritten , islogging);
+		readback(path, buf, bufsize, logfile, byteswritten , islogging, isfectesting);
 		printprogress(count, 0, logfile);
 		if(stop_all) break;
 		seed++;
@@ -677,9 +825,10 @@ int main(int argc, char ** argv)
 	uint32_t seed = 1;
 	char * buf = malloc(sizeof * buf * bufsize);
 	int islogging = 0;
+	int isfectesting = 0;
 
 	print_usage(argc);
-	parse_cmd_val(argc, argv, path, &seed, &islogging);
+	parse_cmd_val(argc, argv, path, &seed, &islogging, &isfectesting);
 	mod = parse_cmd_mode(argc, argv);
 	print_erasure_warning(path);
 	if(islogging) log_init(argc, argv, &logfile);
@@ -687,17 +836,17 @@ int main(int argc, char ** argv)
 	switch(mod)
 	{
 		case singleread:
-			singleread_f(path, buf, bufsize, seed, logfile , islogging);
+			singleread_f(path, buf, bufsize, seed, logfile , islogging, isfectesting);
 			break;
 		case singlewrite:
 			singlewrite_f(path, buf, bufsize, seed, logfile, islogging);
 			break;
 		case singlecycle:
 			stop_cycling = 1;
-			cycle_f(path, buf, bufsize, seed, logfile, islogging);
+			cycle_f(path, buf, bufsize, seed, logfile, islogging, isfectesting);
 			break;
 		case multicycle:
-			cycle_f(path, buf, bufsize, seed, logfile, islogging);
+			cycle_f(path, buf, bufsize, seed, logfile, islogging, isfectesting);
 			break;
 	}
 	if(islogging) fclose(logfile);
