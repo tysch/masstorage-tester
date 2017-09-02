@@ -10,47 +10,35 @@
 #include <fcntl.h>
 #include <errno.h>
 
-uint64_t cnt_blocksize(int res)
-{
-	static uint64_t currblocksize = 0;
-	static uint64_t prevblocksize = 0;
-
-	static uint64_t weight = 0;
-	weight += 3 * res;
-	if(weight)
-	{
-		weight--;
-		currblocksize++;
-	}
-	if(weight == 0)
-	{
-		if(currblocksize > prevblocksize) prevblocksize = currblocksize;
-		currblocksize = 0;
-	}
-	return prevblocksize;
-}
+#define GF 256
 
 struct fecblock
 {
-	uint64_t errcnt;
-	uint64_t errcntmax;
+	uint32_t errcnt;
+	uint32_t errcntmax;
 	uint64_t blocksize;
-};
 
-int nblocksizes;
+	uint32_t n256pos;
+	uint32_t n256cnt;
+	uint32_t n256totcnt;
+
+};
 
 struct fecblock * fectest_init(uint64_t byteswritten, uint64_t *pos , int *nblocksizes)
 {
-	uint64_t bsize = 512;
+	uint64_t bsize = 4;
 	struct fecblock * fecblocks;
 	*pos = 0;
-	for(uint64_t i = bsize; i < byteswritten; i *= 2LL) (*nblocksizes)++;
+	for(uint64_t i = bsize; i < byteswritten/GF; i *= 2LL) (*nblocksizes)++;
 	fecblocks = malloc(sizeof(struct fecblock) * (*nblocksizes));
 	for(int i = 0; i < (*nblocksizes); i++)
 	{
 		fecblocks[i].blocksize = bsize;
 		fecblocks[i].errcnt = 0;
-		fecblocks[i].errcntmax = 0;
+		fecblocks[i].n256pos = 0;
+		fecblocks[i].n256cnt = 0;
+		fecblocks[i].n256totcnt = 0;
+
 		bsize *= 2;
 	}
 	return fecblocks;
@@ -64,25 +52,26 @@ void fecsize_test(struct fecblock * fecblocks, int nerror, uint64_t *pos, int nb
 	{
 		fecblocks[i].errcnt += nerror;
 
-		if(fecblocks[i].errcntmax < fecblocks[i].errcnt)
-			fecblocks[i].errcntmax = fecblocks[i].errcnt;
-
 		if((*pos % fecblocks[i].blocksize) == 0)
+		{
+			if(fecblocks[i].errcnt)
+				fecblocks[i].n256cnt++;
+
+			fecblocks[i].n256pos += 4;
+
+			if(fecblocks[i].n256pos % GF == 0 )
+			{
+				fecblocks[i].n256pos = 0;
+
+				if(fecblocks[i].n256totcnt < fecblocks[i].n256cnt)
+					fecblocks[i].n256totcnt = fecblocks[i].n256cnt;
+
+				fecblocks[i].n256cnt = 0;
+			}
+
 			fecblocks[i].errcnt = 0;
-	}
-	if(nerror)
-	{
-		cnt_blocksize(1);
-		cnt_blocksize(1);
-		cnt_blocksize(1);
-		cnt_blocksize(1);
-	}
-	else
-	{
-		cnt_blocksize(0);
-		cnt_blocksize(0);
-		cnt_blocksize(0);
-		cnt_blocksize(0);
+
+		}
 	}
 }
 
@@ -121,21 +110,18 @@ void readseedandsize_fectest (char * buf, uint32_t bufsize, uint32_t *seed, uint
 
 void print_fec_summary(struct fecblock * fecblocks, int nblocksizes, FILE * logfile, int islogging)
 {
-	uint64_t nblocksize;
-	uint64_t nerr;
-	uint64_t sparebytes;
+	int spareblocks;
 	double overhead;
 	char bsstr[20];
-	char sbstr[20];
-	printf("\n Forward error correction code requirements:\n");
 
+	printf("\n Forward error correction code requirements:\n");
 
 	for(int i = 0; i < nblocksizes; i++)
 	{
-		nerr = fecblocks[i].errcntmax;
-		nblocksize = fecblocks[i].blocksize;
-		bytestostr(nblocksize, bsstr);
-		if(nerr > nblocksize / 2)
+		bytestostr(fecblocks[i].blocksize , bsstr);
+
+		spareblocks = 2 * fecblocks[i].n256totcnt;
+		if(spareblocks >= GF/2)
 		{
 			printf("block size: %-12s -- insufficient block size\n", bsstr);
 			if(islogging)
@@ -143,12 +129,10 @@ void print_fec_summary(struct fecblock * fecblocks, int nblocksizes, FILE * logf
 		}
 		else
 		{
-			sparebytes = 2 * nerr;
-			bytestostr(sparebytes, sbstr);
-			overhead = 100.0 * (double) sparebytes / nblocksize;
-			printf("block size: %-12s  spare bytes: %-12s   overhead: %.2f%%\n", bsstr, sbstr, overhead);
+			overhead = 100.0 * (double) spareblocks / GF;
+			printf("block size: %-12s  spare blocks: %-3i  overhead: %.1f%%\n", bsstr, spareblocks, overhead);
 			if(islogging)
-				fprintf(logfile, "block size: %-12s  spare bytes: %-12s   overhead: %.2f%%\n", bsstr, sbstr, overhead);
+				fprintf(logfile, "block size: %-12s  spare blocks: %-3i  overhead: %.1f%%\n", bsstr, spareblocks, overhead);
 		}
 	}
 }
@@ -474,11 +458,6 @@ int32_t readseedandsize (char * buf, uint32_t bufsize, uint32_t *seed, uint64_t 
 				rcblock[i] |= 1 << j;
 			if(bitcount[8*i + j] == (bufsize / (16*2))) // unrecoverable data condition
 				return -1;
-			/*
-			if(rcblock[i] & (1 << j)) // majority are 1es
-				errcount += (bufsize - bitcount[8*i + j]); // 0es are errors
-			if(!(rcblock[i] & (1 << j))) // majority is 0
-				errcount += bitcount[8*i + j]; // 1es are errors*/
 		}
 	}
 	// stripping 128-bit block for seed and size values
@@ -520,7 +499,6 @@ uint64_t fillfile(char * path, char *buf, uint32_t seed, uint32_t bufsize, FILE 
 	while(1)
 	{
 		if(stop_all) break;
-		//fillbuf(buf, bufsize);
 		if(firstcycle)
 		{
 			firstcycle = 0;
@@ -558,7 +536,6 @@ uint64_t fillfile(char * path, char *buf, uint32_t seed, uint32_t bufsize, FILE 
 //if(byteswritten > 50*1000*1000) break; // simulating smaller size
 	}
 
-
 	writeseedandsize(buf, bufsize, seed, byteswritten);
 	pwrite (fd, buf, bufsize, 0);
 
@@ -576,7 +553,7 @@ uint64_t fillfile(char * path, char *buf, uint32_t seed, uint32_t bufsize, FILE 
 	return byteswritten;
 }
 
-/* partial read tolerant code */
+// partial read tolerant code
 
 uint32_t fileread(int fd, char * buf, uint32_t bufsize , FILE * logfile, int islogging)
 {
@@ -650,7 +627,6 @@ void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t
 			printprogress(mmerr, errcnt, logfile);
 			printf("\n\n seed = %i size = %lli from readback\n\n", (int) seed, (long long int) byteswritten);
 			reseed(seed);
-			//chkbuf(buf, bufsize); //
 
 			if(isfectesting)
 			{
@@ -686,8 +662,6 @@ void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t
 	if(isfectesting) print_fec_summary(fecblocks, nblocksizes, logfile, islogging);
 	if(isfectesting) free(fecblocks);
 
-printf("\n\n fec block size = %lli \n\n", (long long int) cnt_blocksize(0));
-
 }
 
 void print_usage(int arg)
@@ -695,17 +669,17 @@ void print_usage(int arg)
 	if(arg < 3)
 	{
 		printf("\n\nUsage: -d <path> [-o|r|w|c] [-i <salt>] [-l]");
-		printf("\n -d -- path to test device");
-		printf("\n -o -- single read/write cycle, for speed and volume measurement, default)");
-		printf("\n -c -- continuous read/write cycling, for endurance tests");
-		printf("\n -w -- single write only");
-		printf("\n -r -- single read only");
-		printf("\n -w, -r are useful for long term data retention tests");
+		printf("\n\n -d -- path to test device");
+		printf("\n\n -o -- single read/write cycle, for speed and volume measurement, default)");
+		printf("\n\n -c -- continuous read/write cycling, for endurance tests");
+		printf("\n\n -w -- single write only");
+		printf("\n\n -r -- single read only");
+		printf("\n\n -w, -r are useful for long term data retention tests");
 		printf("\n           -w and -r must be launched with the same salt");
-		printf("\n -i -- integer salt for random data being written, default 1\n");
-		printf("\n -l -- write a log file\n");
-		printf("\n -f -- estimates forward error correction techniques requirements ");
-		printf("(i.e. Reed-Solomon) to handle errors being countered\n");
+		printf("\n\n -i -- integer salt for random data being written, default 1\n");
+		printf("\n\n -l -- write a log file\n");
+		printf("\n\n -f -- estimates Reed-Solomon forward error correction code requirement");
+		printf("\n for GF=256, spare blocks count vs block size \n\n");
 		exit(1);
 	}
 	if(getuid())
@@ -815,13 +789,11 @@ void singlewrite_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FIL
 
 void singleread_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FILE * logfile , int islogging, int isfectesting)
 {
-	//reseed(seed);
 	printprogress(reset, 0, logfile);
 	printprogress(readp, 0, logfile);
 
 	readback(path, buf, bufsize, logfile, 0 , islogging, isfectesting);
 }
-
 
 void cycle_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FILE * logfile , int islogging, int isfectesting)
 {
@@ -833,7 +805,6 @@ void cycle_f(char * path, char * buf, uint32_t bufsize, uint32_t seed, FILE * lo
 		printprogress(writep, 0, logfile);
 		byteswritten = fillfile(path, buf, seed, bufsize, logfile , islogging);
 		if(stop_all) break;
-		//reseed(seed);
 		printprogress(readp, 0, logfile);
 		readback(path, buf, bufsize, logfile, byteswritten , islogging, isfectesting);
 		printprogress(count, 0, logfile);
@@ -852,7 +823,7 @@ int main(int argc, char ** argv)
 
 	enum prmode mod;
 	FILE * logfile;
-	char path[256];
+	char path[512];
 
 	uint32_t bufsize = 1024*1024; /* must be multiplier of 16 */
 	uint32_t seed = 1;
