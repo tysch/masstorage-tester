@@ -12,6 +12,11 @@
 
 #define GF 256
 
+// Should be multiplier of 16
+#define MIN_RS_BLOCKSIZE 1024
+
+
+
 struct fecblock
 {
 	uint32_t errcnt;
@@ -26,10 +31,10 @@ struct fecblock
 
 struct fecblock * fectest_init(uint64_t byteswritten, uint64_t *pos , int *nblocksizes)
 {
-	uint64_t bsize = 4;
+	uint64_t bsize = MIN_RS_BLOCKSIZE;
 	struct fecblock * fecblocks;
 	*pos = 0;
-	for(uint64_t i = bsize; i < byteswritten/GF; i *= 2LL) (*nblocksizes)++;
+	for(uint64_t i = MIN_RS_BLOCKSIZE; i < byteswritten/GF; i *= 2LL) (*nblocksizes)++;
 	fecblocks = malloc(sizeof(struct fecblock) * (*nblocksizes));
 	for(int i = 0; i < (*nblocksizes); i++)
 	{
@@ -46,7 +51,7 @@ struct fecblock * fectest_init(uint64_t byteswritten, uint64_t *pos , int *nbloc
 
 void fecsize_test(struct fecblock * fecblocks, int nerror, uint64_t *pos, int nblocksizes)
 {
-	*pos += 4;
+	*pos += MIN_RS_BLOCKSIZE;
 
 	for(int i = 0; i < nblocksizes; i++)
 	{
@@ -57,7 +62,7 @@ void fecsize_test(struct fecblock * fecblocks, int nerror, uint64_t *pos, int nb
 			if(fecblocks[i].errcnt)
 				fecblocks[i].n256cnt++;
 
-			fecblocks[i].n256pos += 4;
+			fecblocks[i].n256pos++;
 
 			if(fecblocks[i].n256pos % GF == 0 )
 			{
@@ -78,32 +83,22 @@ void fecsize_test(struct fecblock * fecblocks, int nerror, uint64_t *pos, int nb
 void readseedandsize_fectest (char * buf, uint32_t bufsize, uint32_t *seed, uint64_t *size, struct fecblock * fecblocks, uint64_t *pos, int nblocksizes)
 {
 	uint64_t * ptr = (uint64_t *) buf;
+	int posmod = 0;
+	int err = 0;
 	for(uint32_t i = 0; i < bufsize; i += 16)
 	{
-		if((uint32_t)(*ptr) != *seed)
-		{
-			fecsize_test(fecblocks, 4, pos, nblocksizes);
-			fecsize_test(fecblocks, 4, pos, nblocksizes);
-		}
-		else
-		{
-			fecsize_test(fecblocks, 0, pos, nblocksizes);
-			fecsize_test(fecblocks, 0, pos, nblocksizes);
-		}
-
+		if((uint32_t)(*ptr) != *seed) err = 1;
 		ptr++;
-
-		if(*ptr != *size)
-		{
-			fecsize_test(fecblocks, 4, pos, nblocksizes);
-			fecsize_test(fecblocks, 4, pos, nblocksizes);
-		}
-		else
-		{
-			fecsize_test(fecblocks, 0, pos, nblocksizes);
-			fecsize_test(fecblocks, 0, pos, nblocksizes);
-		}
+		if(*ptr != *size) err = 1;
 		ptr++;
+		posmod += 16;
+		if(posmod == MIN_RS_BLOCKSIZE)
+		{
+			posmod = 0;
+			if(err) fecsize_test(fecblocks, 1, pos, nblocksizes);
+			else fecsize_test(fecblocks, 0, pos, nblocksizes);
+			err = 0;
+		}
 	}
 }
 
@@ -397,18 +392,28 @@ uint32_t chkbuf(char * buf, uint32_t bufsize, struct fecblock * fecblocks, uint6
 {
 	uint32_t * ptr;
 	uint32_t nerr = 0;
-	uint32_t err_curr;
+	uint32_t err_rs_block = 0;
+	uint32_t posmod = 0;
 	for(uint32_t i = 0; i < bufsize; i += 4)
 	{
 		ptr = (uint32_t *)(buf + i);
-		err_curr = ((*ptr) - xorshift128());
-		if(err_curr != 0) nerr += 4;
+		if((*ptr) != xorshift128())
+		{
+			nerr += 4;
+			err_rs_block = 1;
+		}
 		if(isfectesting)
 		{
-			if((err_curr != 0))
-				fecsize_test(fecblocks, 4, fpos, nblocksizes);
-			else
-				fecsize_test(fecblocks, 0, fpos, nblocksizes);
+			posmod += 4;
+			if(posmod == MIN_RS_BLOCKSIZE)
+			{
+				posmod = 0;
+				if((err_rs_block != 0))
+					fecsize_test(fecblocks, 1, fpos, nblocksizes);
+				else
+					fecsize_test(fecblocks, 0, fpos, nblocksizes);
+				err_rs_block = 0;
+			}
 		}
 	}
 	return nerr;
@@ -679,7 +684,7 @@ void print_usage(int arg)
 		printf("\n\n -i -- integer salt for random data being written, default 1\n");
 		printf("\n\n -l -- write a log file\n");
 		printf("\n\n -f -- estimates Reed-Solomon forward error correction code requirement");
-		printf("\n for GF=256, spare blocks count vs block size \n\n");
+		printf("\n            for GF=256, spare blocks count vs block size \n\n");
 		exit(1);
 	}
 	if(getuid())
