@@ -25,6 +25,96 @@
 // Must be multiplier of 16
 #define DISK_BUFFER 1024*1024
 
+
+// Ctrl+C interrupt handler
+
+int stop_cycling = 0;
+int stop_all = 0;
+
+struct sigaction old_action;
+
+void sigint_handler(int s)
+{
+    if(stop_cycling && stop_all)
+    {
+        printf("\n\nShutting down..\n\n");
+        fflush(stdout);
+        exit(1);
+    }
+
+    if(stop_cycling && (!stop_all))
+    {
+        stop_all = 1;
+        printf("\nAborting current r/w operation and closing device...\n");
+        fflush(stdout);
+    }
+
+    if(!stop_cycling)
+    {
+        stop_cycling = 1;
+        printf("\nRepeated read-write cycling stopped\n");
+        fflush(stdout);
+    }
+}
+
+// Converts bytes count to human readable string
+void bytestostr(uint64_t bytes, char * str)
+{
+    if(bytes < 1024)
+        sprintf(str, "%i B", (int) bytes );
+
+    if((bytes >= 1024) && (bytes < 1024*1024))
+        sprintf(str, "%.3f KiB", bytes/1024.0);
+
+    if((bytes >= 1024*1024) && (bytes < 1024*1024*1024))
+        sprintf(str, "%.3f MiB", bytes/(1024.0*1024));
+
+    if((bytes >= 1024*1024*1024) && (bytes < 1024LL*1024LL*1024LL*1024LL))
+        sprintf(str, "%.3f GiB", bytes/(1024.0*1024.0*1024.0));
+
+    if((bytes >= 1024LL*1024LL*1024LL*1024LL))
+        sprintf(str, "%.3f TiB", bytes/(1024.0*1024.0*1024.0*1024.0));
+}
+
+void todate(uint64_t s, char * date)
+{
+	int sec = s % 60;
+	s /= 60;
+	int min = s % 60;
+	s /= 60;
+	int hours = s % 24;
+	s /= 24;
+	int days = s % 365;
+	s /= 365;
+	int years = s;
+	if(years)
+	{
+	    sprintf(date, "%i yr %i days %02i:%02i:%02i", years, days, hours, min, sec);
+	}
+	else
+	{
+	    if(days)
+	    {
+	        sprintf(date, "%i days %02i:%02i:%02i", days, hours, min, sec);
+	    }
+	    else
+	    {
+	    	if(hours)
+	        {
+	            sprintf(date, "%02i:%02i:%02i", hours, min, sec);
+	        }
+	        else
+	        {
+	            if(min)
+	            {
+	                sprintf(date, "%02i:%02i", min, sec);
+	            }
+	            else sprintf(date, "%is", sec);
+	        }
+	    }
+	}
+}
+
 // Reed-Solomon algorithm test results data, per block size
 struct fecblock
 {
@@ -92,7 +182,7 @@ void fecsize_test(struct fecblock * fecblocks, int nerror, uint64_t *pos, int nb
     }
 }
 
-// Counts damaged Reed-Solomon algorithm blocks in initial BUFSIZE chunk of data
+// Counts damaged Reed-Solomon algorithm blocks in initial DISK_BUFFER chunk of data
 void readseedandsize_fectest (char * buf, uint32_t seed, uint64_t size,
                               struct fecblock * fecblocks, uint64_t *pos, int nblocksizes)
 {
@@ -156,43 +246,12 @@ void print_fec_summary(struct fecblock * fecblocks, int nblocksizes, FILE * logf
                 fprintf(logfile, "block size: %-12s  spare blocks: %-3i  overhead: %.1f%%\n", bsstr, spareblocks, overhead);
             }
         }
-    }
-}
-
-// Pseudorandom number generator state variables
-uint32_t state0;
-uint32_t state1;
-uint32_t state2;
-uint32_t state3;
-
-// Ctrl+C interrupt handler
-
-int stop_cycling = 0;
-int stop_all = 0;
-
-struct sigaction old_action;
-
-void sigint_handler(int s)
-{
-    if(stop_cycling && stop_all)
-    {
-        printf("\n\nShutting down..\n\n");
-        fflush(stdout);
-        exit(1);
-    }
-
-    if(stop_cycling && (!stop_all))
-    {
-        stop_all = 1;
-        printf("\nAborting current r/w operation and closing device...\n");
-        fflush(stdout);
-    }
-
-    if(!stop_cycling)
-    {
-        stop_cycling = 1;
-        printf("\nRepeated read-write cycling stopped\n");
-        fflush(stdout);
+        if(stop_all)
+        {
+            printf("\nWarning! FEC data can be incorrect due to aborted read\n");
+            if(islogging)
+                fprintf(logfile, "Warning! FEC data can be incorrect due to aborted read\n");
+        }
     }
 }
 
@@ -225,25 +284,6 @@ enum printmode
     reset
 };
 
-// Converts bytes count to human readable string
-void bytestostr(uint64_t bytes, char * str)
-{
-    if(bytes < 1024)
-        sprintf(str, "%i B", (int) bytes );
-
-    if((bytes >= 1024) && (bytes < 1024*1024))
-        sprintf(str, "%.3f KiB", bytes/1024.0);
-
-    if((bytes >= 1024*1024) && (bytes < 1024*1024*1024))
-        sprintf(str, "%.3f MiB", bytes/(1024.0*1024));
-
-    if((bytes >= 1024*1024*1024) && (bytes < 1024LL*1024LL*1024LL*1024LL))
-        sprintf(str, "%.3f GiB", bytes/(1024.0*1024.0*1024.0));
-
-    if((bytes >= 1024LL*1024LL*1024LL*1024LL))
-        sprintf(str, "%.3f TiB", bytes/(1024.0*1024.0*1024.0*1024.0));
-}
-
 // Prints and logs status
 // Replace scattered prints with a lots of global variables
 void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
@@ -270,6 +310,7 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
     static char rspeedstr[20];
     static char wspeedstr[20];
     static char sizestr[20];
+    static char datestr[20];
 
     const int readrun = 1;
     const int writerun = 2;
@@ -283,7 +324,7 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
         case size:
             sizewritten = val;
             bytestostr(sizewritten, sizestr);
-            printf("\nactual device size is %s\n", sizestr);
+            printf("\nactual device size is %s", sizestr);
             break;
 
         case rspeed:
@@ -328,10 +369,12 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
 
         case readp:
             status = readrun;
+            printf("\n");
             break;
 
         case writep:
             status = writerun;
+            printf("\n");
             break;
 
         case reset:
@@ -359,46 +402,56 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
         case log:
             if(status == writerun)
             {
+                todate(time(NULL) - startrun, datestr);
                 fprintf(logfile,
-                "\nPassage = %-9i%-3.3f%% write = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
+                "\nPassage = %-9i%-3.3f%%     write = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
                 (int) passage,
                 percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr,
-                (long long int) (time(NULL) - startrun));
+                datestr);
             }
             if(status == readrun)
             {
+                todate(time(NULL) - startrun, datestr);
                 fprintf(logfile,
-                "\nPassage = %-9i%-3.3f%% read = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
+                "\nPassage = %-9i%-3.3f%%     read  = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
                 (int) passage,
                 percent, readstr, rspeedstr, tbwstr, ioerrstr , mmerrstr,
-                (long long int) (time(NULL) - startrun));
+                datestr);
             }
 
             // Intentionally left no break statement
         case print:
             if(status == writerun)
             {
+                todate(time(NULL) - startrun, datestr);
                 printf("                    ");
                 printf(
-                "\rPassage = %-9i%-3.3f%% write = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
+                "\rPassage = %-9i%-3.3f%%     write = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
                 (int) passage,
                 percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr,
-                (long long int) (time(NULL) - startrun));
+                datestr);
             }
             if(status == readrun)
             {
+                todate(time(NULL) - startrun, datestr);
                 printf("                    ");
                 printf(
-                "\rPassage = %-9i%-3.3f%% read = %-12s, %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %llis",
+                "\rPassage = %-9i%-3.3f%%     read  = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
                 (int) passage,
                 percent, readstr, rspeedstr, tbwstr, ioerrstr , mmerrstr,
-                (long long int) (time(NULL) - startrun));
+                datestr);
             }
 
             fflush(stdout);
             break;
     }
 }
+
+// Pseudorandom number generator state variables
+uint32_t state0;
+uint32_t state1;
+uint32_t state2;
+uint32_t state3;
 
 void reseed(uint32_t seed)
 {
@@ -570,7 +623,7 @@ int32_t write_rand_block(char *buf, int fd, FILE * logfile , int islogging)
 {
     int32_t ret;
     fillbuf(buf);
-    ret = write (fd, buf, DISK_BUFFER );
+    ret = write (fd, buf, DISK_BUFFER);
 
     if (ret == -1)
     {
@@ -616,6 +669,13 @@ uint64_t filldevice(char * path, char *buf, uint32_t seed, FILE * logfile , int 
 
     byteswritten += DISK_BUFFER ;
     writeseedandsize(buf, seed, byteswritten);
+
+    printprogress(writeb, byteswritten, logfile);
+    printprogress(tbw, DISK_BUFFER, logfile);
+
+    if(prevbyteswritten)
+        printprogress(perc, (uint64_t)(1000000.0*((double)byteswritten / prevbyteswritten)), logfile);
+    
     pwrite (fd, buf, DISK_BUFFER , 0);
 
     if(close(fd) == -1)
@@ -623,7 +683,8 @@ uint64_t filldevice(char * path, char *buf, uint32_t seed, FILE * logfile , int 
         printf("\ndevice is not closed properly!\n");
         if(islogging) fprintf(logfile, "\ndevice is not closed properly!");
     }
-
+    
+    printprogress(print, 0, logfile);
     if(islogging) printprogress(log, 0, logfile);
 
     if(!prevbyteswritten)
@@ -674,6 +735,7 @@ void readback(char * path, char *buf, FILE * logfile, uint64_t byteswritten , in
     uint32_t seed;
     time_t startrun = time(NULL);
     int firstcycle = 1;
+    static int firstrun = 1;
     uint32_t errcnt = 0;
     char * tmpptr;
     char rdstr[20];
@@ -704,7 +766,6 @@ void readback(char * path, char *buf, FILE * logfile, uint64_t byteswritten , in
             firstcycle = 0;
             errcnt = readseedandsize(buf, bufread, &seed, &byteswritten);
             printprogress(mmerr, errcnt, logfile);
-            printf("\n\n seed = %i size = %lli from readback\n\n", (int) seed, (long long int) byteswritten);
             reseed(seed);
 
             if(isfectesting)
@@ -729,15 +790,20 @@ void readback(char * path, char *buf, FILE * logfile, uint64_t byteswritten , in
         if (bufread < DISK_BUFFER ) break;
     }
 
-    bytestostr(bytesread, rdstr);
-    printf("\nRead back %s of data\n", rdstr);
-
-    if(islogging) fprintf(logfile, "\nRead back %s of data\n", rdstr);
+    
 
     if(close(fd) == -1)
     {
         printf("\ndevice is not closed properly!\n");
         if(islogging) fprintf(logfile, "\ndevice is not closed properly!");
+    }
+    
+    if(firstrun)
+    {
+        bytestostr(bytesread, rdstr);
+        printf("\nRead back %s of data\n", rdstr);
+        if(islogging) fprintf(logfile, "\nRead back %s of data\n", rdstr);
+        firstrun = 0;
     }
 
     if(islogging) printprogress(log, 0, logfile);
@@ -753,18 +819,18 @@ void print_usage(int arg)
 {
     if(arg < 3)
     {
-        printf("\n\nUsage: -d <path> [-o|r|w|c] [-i <salt>] [-l] [-f]");
-        printf("\n\n -d -- path to test device");
-        printf("\n\n -o -- single read/write cycle, for speed and volume measurement, default)");
-        printf("\n\n -c -- continuous read/write cycling, for endurance tests");
-        printf("\n\n -w -- single write only");
-        printf("\n\n -r -- single read only");
-        printf("\n\n -w, -r are useful for long term data retention tests");
+        printf("\n\nUsage: -d <path> [-o|r|w|c <iterations>] [-i <salt>] [-l] [-f]");
+        printf("\n -d -- path to test device");
+        printf("\n -o -- single read/write cycle, for speed and volume measurement, default)");
+        printf("\n -c -- <iterations> read/write cycles, for endurance tests");
+        printf("\n -w -- single write only");
+        printf("\n -r -- single read only");
+        printf("\n -w, -r are useful for long term data retention tests");
         printf("\n           -w and -r must be launched with the same salt");
-        printf("\n\n -i -- integer salt for random data being written, default 1\n");
-        printf("\n\n -l -- write a log file\n");
-        printf("\n\n -f -- estimates Reed-Solomon forward error correction code requirement");
-        printf("\n            for GF=256, spare blocks count vs block size \n\n");
+        printf("\n -i -- integer salt for random data being written, default 1\n");
+        printf("\n -l -- write a log file\n");
+        printf("\n -f -- estimates Reed-Solomon forward error correction code requirement");
+        printf("            for GF=256, spare blocks count vs block size \n\n");
         exit(1);
     }
 
@@ -775,7 +841,7 @@ void print_usage(int arg)
     }
 }
 
-void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , int *islogging, int *isfectesting)
+void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , uint32_t * iterations, int *islogging, int *isfectesting)
 {
     for(int i = 0; i < argc; i++)
     {
@@ -791,6 +857,13 @@ void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , int *i
             if((i + 1 == argc)) exit(1);
             else
                 sscanf(argv[i + 1], "%i", seed);
+        }
+        
+        if(strcmp(argv[i],"-c") == 0)
+        {
+            if((i + 1 == argc)) exit(1);
+            else
+                sscanf(argv[i + 1], "%i", iterations);
         }
 
         if(strcmp(argv[i],"-l") == 0) 
@@ -878,11 +951,12 @@ void singleread_f(char * path, char * buf, uint32_t seed, FILE * logfile , int i
     readback(path, buf, logfile, 0 , islogging, isfectesting);
 }
 
-void cycle_f(char * path, char * buf, uint32_t seed, FILE * logfile , int islogging, int isfectesting)
+void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, FILE * logfile , int islogging, int isfectesting)
 {
     uint64_t byteswritten;
     do
     {
+        iterations--;
         reseed(seed);
         printprogress(writep, 0, logfile);
         byteswritten = filldevice(path, buf, seed, logfile , islogging);
@@ -895,19 +969,25 @@ void cycle_f(char * path, char * buf, uint32_t seed, FILE * logfile , int islogg
 
         seed++;
     }
-    while (!stop_cycling);
+    while ((!stop_cycling) && iterations);
 }
 
 int main(int argc, char ** argv)
 {
     enum prmode mod;
     FILE * logfile;
-    char path[512];
+    char path[256];
     uint32_t seed = 1;
+    uint32_t iterations;
     int islogging = 0;
     int isfectesting = 0;
 
     char * buf = malloc(sizeof * buf * DISK_BUFFER);
+    if(buf == NULL)
+    {
+        printf("\nnot enough RAM");
+        exit(1);
+    }
 
     struct sigaction siginthandler;
     siginthandler.sa_handler = sigint_handler;
@@ -916,11 +996,8 @@ int main(int argc, char ** argv)
     sigaction(SIGINT, &siginthandler, NULL);
 
     print_usage(argc);
-
-    parse_cmd_val(argc, argv, path, &seed, &islogging, &isfectesting);
-
+    parse_cmd_val(argc, argv, path, &seed, &iterations, &islogging, &isfectesting);
     mod = parse_cmd_mode(argc, argv);
-
     print_erasure_warning(path);
 
     if(islogging) log_init(argc, argv, &logfile);
@@ -938,12 +1015,11 @@ int main(int argc, char ** argv)
             break;
 
         case singlecycle:
-            stop_cycling = 1;
-            cycle_f(path, buf, seed, logfile, islogging, isfectesting);
+            cycle_f(path, buf, seed, 1, logfile, islogging, isfectesting);
             break;
 
         case multicycle:
-            cycle_f(path, buf, seed, logfile, islogging, isfectesting);
+            cycle_f(path, buf, seed, iterations, logfile, islogging, isfectesting);
             break;
     }
 
