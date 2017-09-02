@@ -25,7 +25,7 @@ struct fecblock * fectest_init(uint64_t byteswritten, uint64_t *pos , int *nbloc
 	uint64_t bsize = 512;
 	struct fecblock * fecblocks;
 	*pos = 0;
-	for(uint64_t i = bsize; i < byteswritten; i *= 2) (*nblocksizes)++;
+	for(uint64_t i = bsize; i < byteswritten; i *= 2LL) (*nblocksizes)++;
 	fecblocks = malloc(sizeof(struct fecblock) * (*nblocksizes));
 	for(int i = 0; i < (*nblocksizes); i++)
 	{
@@ -45,13 +45,11 @@ void fecsize_test(struct fecblock * fecblocks, int nerror, uint64_t *pos, int nb
 	{
 		fecblocks[i].errcnt += nerror;
 
-		if(*pos % fecblocks[i].blocksize)
-		{
-			if(fecblocks[i].errcntmax < fecblocks[i].errcnt)
-				fecblocks[i].errcntmax = fecblocks[i].errcnt;
+		if(fecblocks[i].errcntmax < fecblocks[i].errcnt)
+			fecblocks[i].errcntmax = fecblocks[i].errcnt;
 
+		if((*pos % fecblocks[i].blocksize) == 0)
 			fecblocks[i].errcnt = 0;
-		}
 	}
 }
 
@@ -112,7 +110,7 @@ void print_fec_summary(struct fecblock * fecblocks, int nblocksizes, FILE * logf
 		}
 		else
 		{
-			sparebytes = nblocksize - 2 * nerr;
+			sparebytes = 2 * nerr;
 			bytestostr(sparebytes, sbstr);
 			overhead = 100.0 * (double) sparebytes / nblocksize;
 			printf("block size: %-12s  spare bytes: %-12s   overhead: %.2f%%\n", bsstr, sbstr, overhead);
@@ -192,13 +190,13 @@ void bytestostr(uint64_t bytes, char * str)
 {
 	if(bytes < 1024)
 		sprintf(str, "%i B", (int) bytes );
-	if((bytes > 1024) && (bytes < 1024*1024))
+	if((bytes >= 1024) && (bytes < 1024*1024))
 		sprintf(str, "%.3f KiB", bytes/1024.0);
-	if((bytes > 1024*1024) && (bytes < 1024*1024*1024))
+	if((bytes >= 1024*1024) && (bytes < 1024*1024*1024))
 		sprintf(str, "%.3f MiB", bytes/(1024.0*1024));
-	if((bytes > 1024*1024*1024) && (bytes < 1024LL*1024LL*1024LL*1024LL))
+	if((bytes >= 1024*1024*1024) && (bytes < 1024LL*1024LL*1024LL*1024LL))
 		sprintf(str, "%.3f GiB", bytes/(1024.0*1024.0*1024.0));
-	if((bytes > 1024LL*1024LL*1024LL*1024LL))
+	if((bytes >= 1024LL*1024LL*1024LL*1024LL))
 		sprintf(str, "%.3f TiB", bytes/(1024.0*1024.0*1024.0*1024.0));
 }
 
