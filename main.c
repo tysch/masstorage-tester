@@ -10,6 +10,25 @@
 #include <fcntl.h>
 #include <errno.h>
 
+uint64_t cnt_blocksize(int res)
+{
+	static uint64_t currblocksize = 0;
+	static uint64_t prevblocksize = 0;
+
+	static uint64_t weight = 0;
+	weight += 3 * res;
+	if(weight)
+	{
+		weight--;
+		currblocksize++;
+	}
+	if(weight == 0)
+	{
+		if(currblocksize > prevblocksize) prevblocksize = currblocksize;
+		currblocksize = 0;
+	}
+	return prevblocksize;
+}
 
 struct fecblock
 {
@@ -50,6 +69,20 @@ void fecsize_test(struct fecblock * fecblocks, int nerror, uint64_t *pos, int nb
 
 		if((*pos % fecblocks[i].blocksize) == 0)
 			fecblocks[i].errcnt = 0;
+	}
+	if(nerror)
+	{
+		cnt_blocksize(1);
+		cnt_blocksize(1);
+		cnt_blocksize(1);
+		cnt_blocksize(1);
+	}
+	else
+	{
+		cnt_blocksize(0);
+		cnt_blocksize(0);
+		cnt_blocksize(0);
+		cnt_blocksize(0);
 	}
 }
 
@@ -652,6 +685,8 @@ void readback(char * path, char *buf, uint32_t bufsize, FILE * logfile, uint64_t
 
 	if(isfectesting) print_fec_summary(fecblocks, nblocksizes, logfile, islogging);
 	if(isfectesting) free(fecblocks);
+
+printf("\n\n fec block size = %lli \n\n", (long long int) cnt_blocksize(0));
 
 }
 
