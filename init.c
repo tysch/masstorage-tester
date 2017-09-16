@@ -7,30 +7,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <time.h>
 #include "init.h"
 #include "strconv.h"
+#include "constants.h"
 
 void print_usage(int arg, int iswritingtofiles)
 {
     if(arg < 3)
     {
         printf("\n\nUsage: -d <path> [-o|r|w|c <iterations>] [-i <salt>] [-l] [-f]");
-        printf("[-u <totalsize[kKmMgGt]> <filesize[kKmMgGt]>]");
-        printf("\n -d -- path to test device or file");
-        printf("\n -o -- single read/write cycle, for speed and volume measurement, default");
-        printf("\n -u -- test ");
-        printf("\n -c -- <iterations> read/write cycles, for endurance tests");
+        printf("[-u <totalsize[kKmMgGt]> <filesize[kKmMgGt]>]\n");
+        printf("\n -d -- path to test device or file\n");
+        printf("\n -o -- single read/write cycle, for speed and volume measurement, default\n");
+        printf("\n -c -- <iterations> read/write cycles, for endurance tests\n");
         printf("\n -w -- single write only");
         printf("\n -r -- single read only");
         printf("\n -w, -r are useful for long term data retention tests");
-        printf("\n           -w and -r must be launched with the same salt");
-        printf("\n -i -- integer salt for random data being written, default 1\n");
-        printf("\n -l -- write a log file\n");
-        printf("\n -f -- estimates Reed-Solomon forward error correction code requirement");
-        printf("            for GF=256, spare blocks count vs block size \n\n");
+        printf("\n           -w and -r must be launched with the same salt\n");
+        printf("\n -i -- non-zero integer salt for random data being written, default 1\n");
+        printf("\n -l -- write a log file in current directory\n");
+        printf("\n -f -- estimates Reed-Solomon forward error correction code requirement for raw device");
+        printf("for GF=256, spare blocks count vs block size \n");
         printf("\n -u -- write to a bunch of files instead of device with defined size\n");
-        printf("\n       filesize should be less than 4 GiB\n");
+        printf("\n       single file should be less than 2 GiB and no more than total data size\n");
+        printf("\n       total file size can be rounded down to a more optimal values\n\n");
         exit(1);
     }
 }
@@ -124,7 +126,7 @@ enum prmode parse_cmd_mode(int argc, char ** argv)
 
 void print_erasure_warning(char * path)
 {
-    char scmd[256];
+    char scmd[PATH_MAX];
     printf("\nWARNING! All data on the device would be lost!\n");
     strcpy(scmd, "fdisk -l | grep ");
     strcat(scmd, path);
@@ -135,7 +137,7 @@ void print_erasure_warning(char * path)
 
 void log_init(int argc, char ** argv, FILE **logfileptr)
 {
-    char logname[25];
+    char logname[24];
     struct tm * timeinfo;
     time_t startrun = time(NULL);
     time_t rawtime;
@@ -155,4 +157,21 @@ void log_init(int argc, char ** argv, FILE **logfileptr)
     time (&rawtime);
     timeinfo = localtime(&rawtime);
     fprintf (*logfileptr , "Started at: %s\n", asctime (timeinfo));
+}
+
+void check_input_values(uint32_t seed, uint32_t iterations, uint64_t totsize, uint32_t bufsize, int iswritingtofiles)
+{
+	if(iswritingtofiles)
+	{
+		if(bufsize > (uint32_t) totsize)
+		{
+			printf("\nsingle file size is bigger than the total data size\n");
+			exit(1);
+		}
+	}
+	if(seed == 0)
+	{
+		printf("\nseed value can't be zero\n");
+		exit(1);
+	}
 }

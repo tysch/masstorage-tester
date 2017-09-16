@@ -2,6 +2,7 @@
  * tests.c
  *
  */
+#include <stdint.h>
 #include "printprogress.h"
 #include "rng.h"
 #include "devtest.h"
@@ -15,19 +16,21 @@ void singlewrite_f(char * path, char * buf, uint32_t seed, FILE * logfile , int 
 {
     reseed(seed);
     printprogress(writep, 0, logfile);
-  //  if(iswritingtofiles)
-  //  	fillfiles(path, buf, seed, logfile , islogging , totsize, bufsize);
-  //  else
+
+    if(iswritingtofiles)
+    	fillfiles(path, buf, seed, logfile , islogging , totsize, bufsize);
+    else
     	filldevice(path, buf, seed, logfile, islogging, bufsize);
 }
+
 
 void singleread_f(char * path, char * buf, uint32_t seed, FILE * logfile , int islogging, int isfectesting,
              int iswritingtofiles, uint64_t totsize, uint32_t bufsize)
 {
     printprogress(readp, 0, logfile);
-//    if(iswritingtofiles)
-;//readfiles(path, buf, logfile, 0 , islogging, isfectesting, islogging , totsize, bufsize);
- //   else
+    if(iswritingtofiles)
+    	readfiles(path, buf, logfile, islogging);
+    else
     	readback(path, buf, logfile, 0 , islogging, isfectesting, bufsize);
 }
 
@@ -38,19 +41,20 @@ void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, FILE *
     do
     {
         iterations--;
+
         reseed(seed);
         printprogress(writep, 0, logfile);
-   //     if(iswritingtofiles)
-  //      	fillfiles(path, buf, seed, logfile , islogging , totsize, bufsize);
-  //      else
+        if(iswritingtofiles)
+        	fillfiles(path, buf, seed, logfile , islogging , totsize, bufsize);
+        else
         	byteswritten = filldevice(path, buf, seed, logfile , islogging, bufsize);
         if(stop_all) break;
 
         printprogress(readp, 0, logfile);
 
-  //      if(iswritingtofiles)
-;//readfiles(path, buf, logfile, 0 , islogging, isfectesting, islogging , totsize, bufsize);
-  //      else
+        if(iswritingtofiles)
+        	readfiles(path, buf, logfile, islogging);
+        else
         	readback(path, buf, logfile, 0 , islogging, isfectesting, bufsize);
 
         printprogress(count, 0, logfile);

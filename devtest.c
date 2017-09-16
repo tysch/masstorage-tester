@@ -3,9 +3,10 @@
  *
  */
 
+#define _XOPEN_SOURCE 500
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <time.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -20,7 +21,6 @@
 
 
 extern int stop_all;
-extern int stop_cycling;
 
 // Fills file with a random data, measured device size and RNG seed information
 uint64_t filldevice(char * path, char *buf, uint32_t seed, FILE * logfile , int islogging, uint32_t bufsize)
@@ -62,7 +62,14 @@ uint64_t filldevice(char * path, char *buf, uint32_t seed, FILE * logfile , int 
     if(prevbyteswritten)
         printprogress(perc, (uint64_t)(1000000.0*((double)byteswritten / prevbyteswritten)), logfile);
 
-    pwrite (fd, buf, bufsize , 0);
+    ret = pwrite (fd, buf, bufsize , 0);
+
+    if(ret != bufsize)
+    {
+        printf("\nHeader write failure!\n");
+        if(islogging) fprintf(logfile, "\nHeader write failure!");
+    }
+
 
     if(close(fd) == -1)
     {
@@ -98,6 +105,8 @@ void readback(char * path, char *buf, FILE * logfile, uint64_t byteswritten , in
     int nblocksizes = 0;
     uint64_t fpos = 0;
 
+    if(isfectesting) fecblocks = fectest_init(byteswritten, &nblocksizes);
+
     int fd = open(path, O_RDONLY);
 
     if(fd == -1)
@@ -123,10 +132,8 @@ void readback(char * path, char *buf, FILE * logfile, uint64_t byteswritten , in
             reseed(seed);
 
             if(isfectesting)
-            {
-                fecblocks = fectest_init(byteswritten, &nblocksizes);
                 readseedandsize_fectest(buf, seed, byteswritten, fecblocks, &fpos, nblocksizes, bufsize);
-            }
+
             continue;
         }
 

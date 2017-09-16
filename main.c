@@ -1,7 +1,3 @@
-/*
- * main.c
- */
-
 #include <signal.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -43,11 +39,13 @@ void sigint_handler(int s)
     }
 }
 
+/////////////////////////////////////////////////////////////////////////////
+
 int main(int argc, char ** argv)
 {
     enum prmode mod;
     FILE * logfile;
-    char path[512];
+    char path[PATH_MAX];
     uint32_t seed = 1;
     uint32_t iterations;
     int islogging = 0;
@@ -67,7 +65,7 @@ int main(int argc, char ** argv)
     print_usage(argc, iswritingtofiles);
     parse_cmd_val(argc, argv, path, &seed, &iterations, &islogging, &isfectesting, &iswritingtofiles, &totsize, &bufsize);
     mod = parse_cmd_mode(argc, argv);
-
+    check_input_values(seed, iterations, totsize, bufsize, iswritingtofiles);
     if(!iswritingtofiles) print_erasure_warning(path);
 
     if(islogging) log_init(argc, argv, &logfile);
@@ -99,7 +97,7 @@ int main(int argc, char ** argv)
             cycle_f(path, buf, seed, iterations, logfile, islogging, isfectesting, iswritingtofiles, totsize, bufsize);
             break;
     }
-
+    printf("\n");
     if(islogging) fclose(logfile);
     free(buf);
     return 0;

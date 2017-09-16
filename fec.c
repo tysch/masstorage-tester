@@ -7,10 +7,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "constants.h"
+#include "strconv.h"
 #include "fec.h"
 
 extern int stop_all;
-extern int stop_cycling;
 
 // Makes array of test results data for Reed-Solomon algorithm for different block size
 struct fecblock * fectest_init(uint64_t byteswritten, int *nblocksizes)

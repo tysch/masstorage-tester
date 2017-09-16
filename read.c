@@ -10,7 +10,6 @@
 #include <stdlib.h>
 
 extern int stop_all;
-extern int stop_cycling;
 
 // partial read tolerant code
 uint32_t fileread(int fd, char * buf, uint32_t bufsize , FILE * logfile, int islogging)

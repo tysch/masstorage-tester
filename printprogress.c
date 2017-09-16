@@ -28,7 +28,6 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
     static uint64_t writebytes;
     static uint64_t sizewritten;
     static time_t startrun;
-    static time_t elapsed;
     static double percent;
 
     static char tbwstr[20];
@@ -133,7 +132,7 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
             {
                 todate(time(NULL) - startrun, datestr);
                 fprintf(logfile,
-                "\nPassage = %-9i%-3.3f%%     write = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
+                "\nPassage = %-9i %-6.4f%%     write = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
                 (int) passage,
                 percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr,
                 datestr);
@@ -142,7 +141,7 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
             {
                 todate(time(NULL) - startrun, datestr);
                 fprintf(logfile,
-                "\nPassage = %-9i%-3.3f%%     read  = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
+                "\nPassage = %-9i %-6.4f%%     read  = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
                 (int) passage,
                 percent, readstr, rspeedstr, tbwstr, ioerrstr , mmerrstr,
                 datestr);
@@ -155,7 +154,7 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
                 todate(time(NULL) - startrun, datestr);
                 printf("                    ");
                 printf(
-                "\rPassage = %-9i%-3.3f%%     write = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
+                "\rPassage = %-9i %-6.4f%%     write = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
                 (int) passage,
                 percent, writestr, wspeedstr, tbwstr, ioerrstr , mmerrstr,
                 datestr);
@@ -165,7 +164,7 @@ void printprogress(enum printmode prflag , uint64_t val, FILE * logfile)
                 todate(time(NULL) - startrun, datestr);
                 printf("                    ");
                 printf(
-                "\rPassage = %-9i%-3.3f%%     read  = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
+                "\rPassage = %-9i %-6.4f%%     read  = %-12s %12s/s    TBW = %-12s   I/O errors = %-12s  data errors = %-12s time = %s",
                 (int) passage,
                 percent, readstr, rspeedstr, tbwstr, ioerrstr , mmerrstr,
                 datestr);

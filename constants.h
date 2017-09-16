@@ -23,5 +23,10 @@
 // Number of files to find size of single file
 #define MAX_CHECKED_FILES 15
 
+// # chars in a path name including nul
+#define PATH_MAX        4096
+
+// Maximum number of files to work with
+#define MAX_FILE_COUNT  (1LL << 60)
 
 #endif /* CONSTANTS_H_ */

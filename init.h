@@ -27,4 +27,6 @@ void print_erasure_warning(char * path);
 
 void log_init(int argc, char ** argv, FILE **logfileptr);
 
+void check_input_values(uint32_t seed, uint32_t iterations, uint64_t totsize, uint32_t bufsize, int iswritingtofiles);
+
 #endif /* INIT_H_ */

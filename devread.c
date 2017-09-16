@@ -48,8 +48,6 @@ uint32_t chkbuf_dev(char * buf, uint32_t bufsize,  struct fecblock * fecblocks, 
     return nerr;
 }
 
-
-
 // Recovers seed and size information from buffer
 // Returns error bytes count
 int32_t readseedandsize (char * buf, uint32_t bufsize, uint32_t *seed, uint64_t *size)
