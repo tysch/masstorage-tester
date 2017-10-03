@@ -1,175 +1,149 @@
-/*
- * devtest.c
- *
- */
-
-#define _XOPEN_SOURCE 500
-#include <unistd.h>
-#include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <stdint.h>
-#include "fec.h"
 #include "rng.h"
-#include "devwrite.h"
-#include "devread.h"
-#include "read.h"
-#include "printprogress.h"
-#include "strconv.h"
+#include "print.h"
+#include "nofailio.h"
+#include "fec.h"
 
 
 extern int stop_all;
 
-// Fills file with a random data, measured device size and RNG seed information
-uint64_t filldevice(char * path, char *buf, uint32_t seed, FILE * logfile , int islogging, uint32_t bufsize)
+// Fills file with a random data
+void filldevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint32_t seed)
 {
-    static uint64_t prevbyteswritten = 0; // Previously measured device size for progress counting
-    uint64_t byteswritten = 0;
-    int32_t ret;
-    time_t startrun = time(NULL);
+	uint64_t byteswritten = 0;
+	time_t startrun = time(NULL);
 
-    int fd = device_init_write(path, logfile, islogging, bufsize);
+    uint32_t ioerrors = 0;
+    uint64_t totioerrors = 0;
 
-    while(!stop_all)   // Stopping with Ctrl+C
+	reseed(seed);
+	int fd = nofail_open(path);
+	if(fd == -1)
+	{
+		print(ERROR, "\nFatal error\n");
+		// TODO: gentle exit routine
+		exit(1);
+	}
+	else
+	{
+	    for(uint64_t wrpos = 0; wrpos < count; wrpos += bufsize)
+	    {
+		    if(stop_all) break;
+		    fillbuf(buf, bufsize);
+
+		    ioerrors = nofail_pwrite(fd, buf, bufsize, wrpos);
+		    byteswritten += bufsize - ioerrors;
+		    totioerrors += ioerrors;
+
+		    // Printing stats
+		    printprogress(perc, (uint64_t)(1000000.0*((double)byteswritten / count)));
+	        printprogress(writeb, byteswritten);
+	        printprogress(tbw, bufsize - ioerrors);
+	        printprogress(ioerror, totioerrors);
+		    if(time(NULL) - startrun)
+		        printprogress(wspeed, byteswritten / (time(NULL) - startrun));
+		    printprogress(show, 0);
+	    }
+	}
+
+	nofail_close(fd);
+    printprogress(log, 0);
+}
+
+// Compares buffer data with a generated random values and counts read mismatches
+// Returns error bytes count and marks damaged blocks for Reed-Solomon FEC testing
+uint32_t chkbuf_dev(char * buf, uint32_t bufsize,  struct fecblock * fecblocks, uint64_t *fpos, int nblocksizes, int isfectesting)
+{
+    uint32_t * ptr;
+    uint32_t nerr = 0;
+    uint32_t err_rs_block = 0;
+    uint32_t posmod = 0;
+
+    for(uint32_t i = 0; i <  bufsize; i += sizeof(uint32_t))
     {
-        ret = write_rand_block(buf, fd, logfile, islogging, bufsize);
-        if (ret == -1) break;
+        ptr = (uint32_t *)(buf + i);
 
-        byteswritten += ret;
-        // Progress print section
-        if(prevbyteswritten)
-            printprogress(perc, (uint64_t)(1000000.0*((double)byteswritten / prevbyteswritten)), logfile);
+        if((*ptr) != xorshift128())
+        {
+            nerr += sizeof(uint32_t);
+            err_rs_block = 1;
+        }
 
-        printprogress(writeb, byteswritten, logfile);
-        printprogress(tbw, ret, logfile);
+        // Reed-Solomon damaged blocks counting
+        if(isfectesting)
+        {
+            posmod += sizeof(uint32_t);
+            if(posmod == MIN_RS_BLOCKSIZE)
+            {
+                posmod = 0;
 
-        if(time(NULL) - startrun)
-            printprogress(wspeed, byteswritten / (time(NULL) - startrun), logfile);
+                if((err_rs_block != 0))
+                    fecsize_test(fecblocks, 1, fpos, nblocksizes);
+                else
+                    fecsize_test(fecblocks, 0, fpos, nblocksizes);
 
-        printprogress(print, 0, logfile);
-        // Breaks if no more data can be write to device
-        if(ret < bufsize ) break;
+                err_rs_block = 0;
+            }
+        }
     }
-
-    byteswritten += bufsize ;
-    writeseedandsize(buf, seed, byteswritten, bufsize);
-
-    printprogress(writeb, byteswritten, logfile);
-    printprogress(tbw, bufsize, logfile);
-
-    if(prevbyteswritten)
-        printprogress(perc, (uint64_t)(1000000.0*((double)byteswritten / prevbyteswritten)), logfile);
-
-    ret = pwrite (fd, buf, bufsize , 0);
-
-    if(ret != bufsize)
-    {
-        printf("\nHeader write failure!\n");
-        if(islogging) fprintf(logfile, "\nHeader write failure!");
-    }
-
-
-    if(close(fd) == -1)
-    {
-        printf("\ndevice is not closed properly!\n");
-        if(islogging) fprintf(logfile, "\ndevice is not closed properly!");
-    }
-
-    printprogress(print, 0, logfile);
-    if(islogging) printprogress(log, 0, logfile);
-
-    if(!prevbyteswritten)
-    {
-        prevbyteswritten = byteswritten;
-        printprogress(size, byteswritten, logfile);
-    }
-    return byteswritten;
+    return nerr;
 }
 
 // Reads and checks written data to the device
-void readback(char * path, char *buf, FILE * logfile, uint64_t byteswritten , int islogging, int isfectesting, uint32_t bufsize)
+void readdevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint32_t seed, int isfectesting)
 {
     uint64_t bytesread = 0;
-    ssize_t bufread;
-    uint32_t seed;
-    time_t startrun = time(NULL);
-    int firstcycle = 1;
-    static int firstrun = 1;
-    uint32_t errcnt = 0;
-    char * tmpptr;
-    char rdstr[20];
+    uint32_t ioerrors = 0;
+    uint64_t totioerrors = 0;
+    uint32_t memerrors = 0;
 
-    struct fecblock * fecblocks;
     int nblocksizes = 0;
+    struct fecblock * fecblocks = NULL;
     uint64_t fpos = 0;
 
-    if(isfectesting) fecblocks = fectest_init(byteswritten, &nblocksizes);
+    time_t startrun = time(NULL);
 
-    int fd = open(path, O_RDONLY);
+	int fd = nofail_open(path);
+	if(fd == -1)
+	{
+		print(ERROR, "\nFatal error\n");
+		// TODO: gentle exit routine
+		exit(1);
+	}
+	else
+	{
+	    reseed(seed);
 
-    if(fd == -1)
-    {
-        printf("\nDevice access error!\n");
-        if(islogging) fprintf(logfile, "\nDevice access error!\n");
-        exit(1);
-    }
+	    if(isfectesting) fecblocks = fectest_init(count, &nblocksizes);
 
-    while (!stop_all)
-    {
-        bufread = fileread(fd, buf, bufsize  , logfile, islogging);
-        bytesread += bufread;
-        // Progress print section
-        printprogress(readb, bytesread, logfile);
+		for(uint64_t rdpos = 0; rdpos < count; rdpos += bufsize)
+	    {
+		    if(stop_all) break;
+		    ioerrors = nofail_pread(fd, buf, bufsize, rdpos);
+		    totioerrors += ioerrors;
 
-        // Recovers size and seed information and prepares forward error correction testing routine
-        if(firstcycle)
-        {
-            firstcycle = 0;
-            errcnt = readseedandsize(buf, bufread, &seed, &byteswritten);
-            printprogress(mmerr, errcnt, logfile);
-            reseed(seed);
+		    bytesread += bufsize - ioerrors;
+		    memerrors = chkbuf_dev(buf, bufsize, fecblocks, &fpos, nblocksizes, isfectesting);
 
-            if(isfectesting)
-                readseedandsize_fectest(buf, seed, byteswritten, fecblocks, &fpos, nblocksizes, bufsize);
+            printprogress(readb, bytesread);
+            printprogress(ioerror, totioerrors);
+            printprogress(mmerr, memerrors);
+            printprogress(perc, (uint64_t)(1000000.0*((double)bytesread / count)));
+            if(time(NULL) - startrun)
+                printprogress(rspeed, bytesread / (time(NULL) - startrun));
+            printprogress(show, 0);
 
-            continue;
-        }
+	    }
+	}
 
-        errcnt = chkbuf_dev(buf, bufread, fecblocks, &fpos, nblocksizes, isfectesting);
-        printprogress(mmerr, errcnt, logfile);
-
-        if(byteswritten)
-            printprogress(perc, (uint64_t)(1000000.0*((double)bytesread / byteswritten)), logfile);
-
-        if(time(NULL) - startrun)
-            printprogress(rspeed, bytesread / (time(NULL) - startrun), logfile);
-
-        printprogress(print, 0, logfile);
-
-        if (bufread < bufsize) break;
-    }
-
-    if(close(fd) == -1)
-    {
-        printf("\ndevice is not closed properly!\n");
-        if(islogging) fprintf(logfile, "\ndevice is not closed properly!");
-    }
-
-    if(firstrun)
-    {
-        bytestostr(bytesread, rdstr);
-        printf("\nRead back %s of data\n", rdstr);
-        if(islogging) fprintf(logfile, "\nRead back %s of data\n", rdstr);
-        firstrun = 0;
-    }
-
-    if(islogging) printprogress(log, 0, logfile);
+	nofail_close(fd);
+	printprogress(log, 0);
 
     if(isfectesting)
     {
-        print_fec_summary(fecblocks, nblocksizes, logfile, islogging);
+        print_fec_summary(fecblocks, nblocksizes);
         free(fecblocks);
     }
 }

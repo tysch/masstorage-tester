@@ -1,148 +1,130 @@
 /*
  * filetest.c
- *
  */
 
 #include <stdio.h>
 #include <stdint.h>
-#include <fcntl.h>
+#include <string.h>
 #include <time.h>
-#include "printprogress.h"
-#include "strconv.h"
 #include "constants.h"
-#include "filewrite.h"
-#include "fileread.h"
-#include "optrw.h"
-#include "devread.h"
-#include "devwrite.h"
+#include "strconv.h"
 #include "rng.h"
+#include "print.h"
+#include "fileio.h"
 
-extern int stop_cycling;
+extern int stop_all;
 
-void fillfiles(char * path, char * buf, uint32_t seed, FILE * logfile , int islogging , uint64_t totsize, uint32_t bufsize)
+void fillfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_t bufsize)
 {
-	uint64_t pow = 1;
+	char filename[PATH_MAX + 24];
+	char errmesg[128];
+
 	uint64_t nfiles = totsize / bufsize;
 	time_t startrun = time(NULL);
 	uint64_t byteswritten = 0;
 
-	for(uint64_t i = 0; i < nfiles; i++)
-	{
-		if(stop_cycling) break;
+	uint32_t ioerrors = 0;
+	uint64_t totioerrors = 0;
 
-		if(i == (pow - 1)) //Use 2^n-th file to store seed and size information
-		{
-			writeseedandsize(buf, seed, totsize, bufsize);
-			pow <<= 1;
-		}
-		else fillbuf(buf, bufsize);
-		writefile(i, path, buf, logfile, islogging, bufsize);
-
-		byteswritten += bufsize;
-
-        printprogress(writeb, byteswritten, logfile);
-        printprogress(tbw, bufsize, logfile);
-        if(time(NULL) - startrun)
-            printprogress(wspeed, byteswritten / (time(NULL) - startrun), logfile);
-        printprogress(print, 0, logfile);
-        printprogress(perc, (uint64_t)(1000000.0*((double)(i + 1) / nfiles)), logfile);
-	}
-    if(islogging) printprogress(log, 0, logfile);
-}
-
-void readfiles(char * path, char * buf, FILE * logfile, int islogging)
-{
-	uint64_t pow = 1;
-	uint64_t nfiles;
-	uint64_t totsize;
-	uint32_t bufsize;
-	uint32_t seed;
-
-	uint32_t dummyseed; // variables to fit  readseedandsize() for file errors only
-	uint64_t dummysize;
-
-	uint32_t currerr = 0;
-	uint64_t toterr  = 0;
-	uint64_t bytesread = 0;
-
-    time_t startrun = time(NULL);
-	char errsize[24];
-
-	int32_t res = -1;
-
-	// Attempts to recover file size from MAX_CHECKED_FILES,
-	bufsize = bufsize_retrieve(path, logfile, islogging);
-
-	do //Read 2^n-th files until seed and size information can be retrieved
-	{
-		if(stop_cycling) break;
-		if(pow > MAX_FILE_COUNT) break;
-
-		readfile((pow - 1), path, buf, logfile, islogging, bufsize);
-
-		pow <<= 1;
-
-		res = readseedandsize(buf, bufsize, &seed, &totsize);
-
-        if(time(NULL) - startrun)
-            printprogress(rspeed, bytesread / (time(NULL) - startrun), logfile);
-
-        printprogress(print, 0, logfile);
-	}
-	while (res == -1);
-
-	if(res == -1)
-	{
-		printf("\nseed and size information is unrecoverable\n");
-		exit(1);
-	}
-
-	nfiles = totsize / bufsize;
 	reseed(seed);
 
-	pow = 1;
+	for(uint64_t i = 0; i < nfiles; i++)
+	{
+		if(stop_all) break;
+
+		fillbuf(buf, bufsize);
+
+		sprintf(filename, "%s/%llu.dat", path, (unsigned long long) i);
+
+		ioerrors = nofail_writefile(filename, buf, bufsize);
+
+		byteswritten += bufsize - ioerrors;
+		totioerrors = ioerrors;
+
+	    if (ioerrors)
+	    {
+	        sprintf(errmesg, "\n%llu.dat write error\n", (unsigned long long) i);
+			print(ERROR, errmesg);
+	    }
+
+	    printprogress(writeb, byteswritten);
+	    printprogress(ioerror, totioerrors);
+        printprogress(tbw, bufsize);
+        if(time(NULL) - startrun)
+            printprogress(wspeed, byteswritten / (time(NULL) - startrun));
+        printprogress(show, 0);
+        printprogress(perc, (uint64_t)(1000000.0*((double)(i + 1) / nfiles)));
+	}
+
+    printprogress(log, 0);
+}
+
+// Compares buffer data with a generated random values and counts read mismatches
+// Returns error bytes count
+uint32_t chkbuf_file(char * buf, uint32_t bufsize)
+{
+    uint32_t * ptr;
+    uint32_t nerr = 0;
+
+    for(uint32_t i = 0; i <  bufsize; i += sizeof(uint32_t))
+    {
+        ptr = (uint32_t *)(buf + i);
+
+        if((*ptr) != xorshift128())
+        {
+            nerr += sizeof(uint32_t);
+        }
+    }
+    return nerr;
+}
+
+
+void readfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_t bufsize)
+{
+
+	char filename[PATH_MAX + 24];
+	char errmesg[128];
+	char errsize[24];
+
+	uint64_t nfiles = totsize / bufsize;
+	time_t startrun = time(NULL);
+	uint64_t bytesread = 0;
+
+	uint32_t ioerrors = 0;
+	uint64_t totioerrors = 0;
+	uint64_t memerrors = 0;
+
+	reseed(seed);
 
 	for(uint64_t i = 0; i < nfiles; i++)
 	{
-		if(stop_cycling) break;
+		if(stop_all) break;
+		sprintf(filename, "%s/%llu.dat", path, (unsigned long long) i);
 
-		bytesread += readfile(i, path, buf, logfile, islogging, bufsize);
+		ioerrors = nofail_readfile(filename, buf, bufsize);
+		totioerrors += ioerrors;
+		bytesread += bufsize - ioerrors;
+		memerrors += chkbuf_file(buf, bufsize);
 
-		if(i == (pow - 1)) //Skip each 2^n-th file
+
+		if(ioerrors)
 		{
-			res += readseedandsize(buf, bufsize, &dummyseed, &dummysize);
-			if(res >= 0)
-				currerr += res;
-			else
-				currerr += bufsize;
-			pow <<= 1;
-			printprogress(readb, bytesread, logfile);
-	        printprogress(perc, (uint64_t)(1000000.0*((double)(i + 1) / nfiles)), logfile);
-			printprogress(mmerr, currerr, logfile);
-		    if(time(NULL) - startrun)
-		        printprogress(rspeed, bytesread / (time(NULL) - startrun), logfile);
-			printprogress(print, 0, logfile);
-			continue;
+			bytestostr(ioerrors, errsize);
+			sprintf(errmesg, "\n--------------------file %-15llu is damaged, %-9s errors\n", (unsigned long long) i, errsize);
+			print(ERROR, errmesg);
 		}
-		else
-		{
-			currerr = chkbuf_file(buf, bufsize);
-			toterr += currerr;
-			if(currerr)
-			{
-				bytestostr(currerr, errsize);
-				printf("\n--------------------file %-15lli is damaged, %-9s errors\n", i, errsize);
-				if(islogging) fprintf(logfile, "\n--------------------file %-15lli is damaged, %-9s errors\n", i, errsize);
-			}
-			printprogress(readb, bytesread, logfile);
-	        printprogress(perc, (uint64_t)(1000000.0*((double)(i + 1) / nfiles)), logfile);
-			printprogress(mmerr, currerr, logfile);
-		    if(time(NULL) - startrun)
-		        printprogress(rspeed, bytesread / (time(NULL) - startrun), logfile);
-			printprogress(print, 0, logfile);
-		}
+
+		// TODO: per-run error counting
+
+		printprogress(readb, bytesread);
+	    printprogress(perc, (uint64_t)(1000000.0*((double)(i + 1) / nfiles)));
+		printprogress(mmerr, memerrors);
+		printprogress(ioerror, totioerrors);
+		if(time(NULL) - startrun)
+		    printprogress(rspeed, bytesread / (time(NULL) - startrun));
+		printprogress(show, 0);
 	}
-	if(islogging) printprogress(log, 0, logfile);
+	printprogress(log, 0);
 }
 
 

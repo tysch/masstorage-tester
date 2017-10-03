@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include "init.h"
-#include "printprogress.h"
+#include "print.h"
 #include "constants.h"
 #include "tests.h"
 
@@ -44,13 +44,15 @@ void sigint_handler(int s)
 int main(int argc, char ** argv)
 {
     enum prmode mod;
-    FILE * logfile;
-    char path[PATH_MAX];
+
+    char path[PATH_MAX] = ".";      // Path to device or directory with files being tested
+
     uint32_t seed = 1;
-    uint32_t iterations;
-    int islogging = 0;
+    uint32_t iterations = 1;
+
     int isfectesting = 0;
     int iswritingtofiles = 0;
+
     uint64_t totsize = 0;
     uint32_t bufsize = DISK_BUFFER;
 
@@ -62,13 +64,15 @@ int main(int argc, char ** argv)
     siginthandler.sa_flags = 0;
     sigaction(SIGINT, &siginthandler, NULL);
 
-    print_usage(argc, iswritingtofiles);
-    parse_cmd_val(argc, argv, path, &seed, &iterations, &islogging, &isfectesting, &iswritingtofiles, &totsize, &bufsize);
+    print_usage(argc);
+
+    parse_cmd_val(argc, argv, path, &seed, &iterations, &isfectesting, &iswritingtofiles, &totsize, &bufsize);
+
     mod = parse_cmd_mode(argc, argv);
     check_input_values(seed, iterations, totsize, bufsize, iswritingtofiles);
     if(!iswritingtofiles) print_erasure_warning(path);
 
-    if(islogging) log_init(argc, argv, &logfile);
+    log_init(argc, argv);
 
     buf = malloc(sizeof * buf * bufsize);
     if(buf == NULL)
@@ -77,28 +81,28 @@ int main(int argc, char ** argv)
         exit(1);
     }
 
-    printprogress(reset, 0, logfile);
-
     switch(mod)
     {
         case singleread:
-            singleread_f(path, buf, seed, logfile , islogging, isfectesting, iswritingtofiles, totsize, bufsize);
+            singleread_f(path, buf, bufsize, totsize, seed, isfectesting, iswritingtofiles);
             break;
 
         case singlewrite:
-            singlewrite_f(path, buf, seed, logfile, islogging, iswritingtofiles, totsize, bufsize);
+            singlewrite_f(path, buf, bufsize, totsize, seed, iswritingtofiles);
             break;
 
         case singlecycle:
-            cycle_f(path, buf, seed, 1, logfile, islogging, isfectesting, iswritingtofiles, totsize, bufsize);
+        	cycle_f(path, buf, seed, 1, isfectesting, iswritingtofiles, totsize, bufsize);
             break;
 
         case multicycle:
-            cycle_f(path, buf, seed, iterations, logfile, islogging, isfectesting, iswritingtofiles, totsize, bufsize);
+        	cycle_f(path, buf, seed, iterations, isfectesting, iswritingtofiles, totsize, bufsize);
             break;
     }
+
     printf("\n");
-    if(islogging) fclose(logfile);
+
+    print(LOGFILE_EXIT, " ");
     free(buf);
     return 0;
 }

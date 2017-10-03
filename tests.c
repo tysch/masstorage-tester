@@ -1,66 +1,71 @@
 /*
  * tests.c
- *
  */
 #include <stdint.h>
-#include "printprogress.h"
-#include "rng.h"
+#include "print.h"
 #include "devtest.h"
 #include "filetest.h"
+#include "saveload.h"
 
-extern int stop_all;
 extern int stop_cycling;
 
-void singlewrite_f(char * path, char * buf, uint32_t seed, FILE * logfile , int islogging,
-             int iswritingtofiles, uint64_t totsize, uint32_t bufsize)
+void singlewrite_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int iswritingtofiles)
 {
-    reseed(seed);
-    printprogress(writep, 0, logfile);
+    printprogress(reset, 0);
+	printprogress(writep, 0);
+
+	load(&seed, &totsize, &bufsize);
 
     if(iswritingtofiles)
-    	fillfiles(path, buf, seed, logfile , islogging , totsize, bufsize);
+    	fillfiles(path, buf, seed, totsize, bufsize);
     else
-    	filldevice(path, buf, seed, logfile, islogging, bufsize);
+    	filldevice(path, buf, bufsize, totsize, seed);
+
+	save(seed, totsize, bufsize);
 }
 
-
-void singleread_f(char * path, char * buf, uint32_t seed, FILE * logfile , int islogging, int isfectesting,
-             int iswritingtofiles, uint64_t totsize, uint32_t bufsize)
+void singleread_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int isfectesting, int iswritingtofiles)
 {
-    printprogress(readp, 0, logfile);
+    printprogress(reset, 0);
+	printprogress(readp, 0);
+	load(&seed, &totsize, &bufsize);
+
     if(iswritingtofiles)
-    	readfiles(path, buf, logfile, islogging);
+    	readfiles(path, buf, seed, totsize, bufsize);
     else
-    	readback(path, buf, logfile, 0 , islogging, isfectesting, bufsize);
+    	readdevice(path, buf, bufsize, totsize, seed, isfectesting);
+
+    save(seed, totsize, bufsize);
 }
 
-void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, FILE * logfile , int islogging, int isfectesting,
+void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, int isfectesting,
              int iswritingtofiles, uint64_t totsize, uint32_t bufsize)
 {
-    uint64_t byteswritten;
-    do
+    printprogress(reset, 0);
+	do
     {
         iterations--;
+        load(&seed, &totsize, &bufsize);
 
-        reseed(seed);
-        printprogress(writep, 0, logfile);
+        printprogress(writep, 0);
         if(iswritingtofiles)
-        	fillfiles(path, buf, seed, logfile , islogging , totsize, bufsize);
+        	fillfiles(path, buf, seed, totsize, bufsize);
         else
-        	byteswritten = filldevice(path, buf, seed, logfile , islogging, bufsize);
-        if(stop_all) break;
+        	filldevice(path, buf, bufsize, totsize, seed);
 
-        printprogress(readp, 0, logfile);
+        save(seed, totsize, bufsize);
+
+        printprogress(readp, 0);
 
         if(iswritingtofiles)
-        	readfiles(path, buf, logfile, islogging);
+        	readfiles(path, buf, seed, totsize, bufsize);
         else
-        	readback(path, buf, logfile, 0 , islogging, isfectesting, bufsize);
+        	readdevice(path, buf, bufsize, totsize, seed, isfectesting);
 
-        printprogress(count, 0, logfile);
-        if(stop_all) break;
-
+        printprogress(count, 0);
         seed++;
+
+        save(seed, totsize, bufsize);
     }
     while ((!stop_cycling) && iterations);
 }

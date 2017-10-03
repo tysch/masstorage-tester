@@ -1,6 +1,5 @@
 /*
  * strconv.c
- *
  */
 
 #include <stdio.h>
@@ -26,7 +25,7 @@ void bytestostr(uint64_t bytes, char * str)
         sprintf(str, "%.3f TiB", bytes/(1024.0*1024.0*1024.0*1024.0));
 }
 
-// converts seconds interval to date
+// Converts seconds interval to date
 void todate(uint64_t s, char * date)
 {
 	int sec = s % 60;

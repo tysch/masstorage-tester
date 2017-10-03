@@ -29,4 +29,10 @@
 // Maximum number of files to work with
 #define MAX_FILE_COUNT  (1LL << 60)
 
+// Maximum number of repeats to read or write to file/device
+#define MAX_RETRIES 16
+
+// Bytes to be skipped in case of unrecoverable read/write errors
+#define SKIP_BYTES 8
+
 #endif /* CONSTANTS_H_ */
