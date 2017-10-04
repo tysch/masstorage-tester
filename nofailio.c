@@ -6,9 +6,14 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include "errmesg.h"
 #include "constants.h"
+#include "print.h"
 #include <errno.h>
+
+
+static char errmesg[512];
 
 void nofail_fsync(int fd)
 {
@@ -21,7 +26,7 @@ void nofail_fsync(int fd)
 
 int nofail_open(char * path)
 {
-	int fd = open(path, O_RDWR | O_CREAT, 0666);
+	int fd = open(path, O_RDWR | O_SYNC | O_CREAT, 0666);
 
 	if(fd == -1) printopenerr();
 
@@ -55,10 +60,12 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, off_t offset)
 
 	uint32_t padzero_start = 0;
 	uint32_t padzero_end = 0;
+	uint32_t skipbytes = SKIP_BYTES;
 
 	uint32_t retries;
 
 	uint32_t ioreaderrcnt = 0;
+	int firsterr = 0;
 
 	bufpos = 0;
 
@@ -81,6 +88,11 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, off_t offset)
 
 		if(res <= 0)// Try to read more times if nothing have been read out
 		{
+			if(!firsterr) print(ERROR, "\n");
+			firsterr = 1;
+			sprintf(errmesg, "\rWarning: nothing have been read at position %llu, retrying...", (unsigned long long) curr_pos);
+			print(ERROR, errmesg);
+
 			while(retries) // Try to read again if error is recoverable
 			{
 				retries--;
@@ -107,11 +119,14 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, off_t offset)
 
 		if(res == -1) // Read failed even after retries
 		{
+			sprintf(errmesg, "\rError: unreadable block starting at %llu, skipping %i bytes", (unsigned long long) curr_pos, skipbytes);
+			print(ERROR, errmesg);
+
 			printpreaderr(); //Print error message
 
 			// Pad next SKIP_BYTES with zeroes and move forward
 			padzero_start = bufpos;
-			padzero_end = bufpos + SKIP_BYTES;
+			padzero_end = bufpos + skipbytes;
 			if(padzero_end > bufsize) padzero_end = bufsize;
 			// Count padded bytes as a read errors
 			ioreaderrcnt += - padzero_end - padzero_start;
@@ -119,10 +134,13 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, off_t offset)
 			for(int i = padzero_start; i < padzero_end; i++) buf[i] = 0;
 
 			bufpos = padzero_end;
+
+			skipbytes = skipbytes + skipbytes / SKIP_DIV;
+			if(skipbytes > (1 << 30)) skipbytes = 1 << 30; // To prevent overflow
 		}
 	}
 	while (bufpos != bufsize); // Buffer is full
-
+	print(ERROR, "\n");
 	return ioreaderrcnt;
 }
 
@@ -136,9 +154,12 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, off_t offset)
 	int32_t res;
 	off_t curr_pos;
 
+	uint32_t skipbytes = SKIP_BYTES; //initial count of bytes to skip
+
 	uint32_t retries;
 
 	int32_t iowriteerrcnt = 0;
+	int firsterr = 0;
 
 	bufpos = 0;
 
@@ -160,6 +181,11 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, off_t offset)
 
 		if(res <= 0)   // Try to write more times if nothing have been written
 		{
+			if(!firsterr) print(ERROR, "\n");
+			firsterr = 1;
+			sprintf(errmesg, "\rWarning: nothing have been written at position %llu, retrying...", (unsigned long long) curr_pos);
+			print(ERROR, errmesg);
+
 			while(retries) // Try to write again if error is recoverable
 			{
 				retries--;
@@ -185,20 +211,25 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, off_t offset)
 
 		if(res == -1) // Write failed even after retries
 		{
-			printpreaderr(); //Print error message
+			sprintf(errmesg, "\rError: cannot write block starting at %llu, skipping %i bytes ", (unsigned long long) curr_pos, skipbytes);
+			print(ERROR, errmesg);
 
-			// Skip next SKIP_BYTES and move forward
+			printpwriteerr(); //Print error message
+
+			// Skip next skipbytes and move forward
 
 			iowriteerrcnt -= bufpos; // count i/o errors properly
 
-			bufpos += SKIP_BYTES;
+			bufpos += skipbytes;
 			if(bufpos > bufsize) bufpos = bufsize;
 
 			iowriteerrcnt += bufpos;
 
+			skipbytes = skipbytes + skipbytes / SKIP_DIV;
+			if(skipbytes > (1 << 30)) skipbytes = 1 << 30; // To prevent overflow
 		}
 	}
 	while (bufpos != bufsize); // Nothing left to write
-
+	print(ERROR, "\n");
 	return (uint32_t) iowriteerrcnt;
 }

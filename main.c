@@ -69,7 +69,13 @@ int main(int argc, char ** argv)
     parse_cmd_val(argc, argv, path, &seed, &iterations, &isfectesting, &iswritingtofiles, &totsize, &bufsize);
 
     mod = parse_cmd_mode(argc, argv);
+
+    if((!iswritingtofiles) &&   // Writing to device
+    		(totsize == 0))     // Size of device in not explicitly specified
+    	totsize = read_device_size(path);
+
     check_input_values(seed, iterations, totsize, bufsize, iswritingtofiles);
+
     if(!iswritingtofiles) print_erasure_warning(path);
 
     log_init(argc, argv);

@@ -35,4 +35,10 @@
 // Bytes to be skipped in case of unrecoverable read/write errors
 #define SKIP_BYTES 8
 
+// Throttling of skip bytes growth, should be not less than 1
+#define SKIP_DIV 4
+
+// Size units derived from /sys/class/block/sd*/size
+#define SYSFS_SIZE_BLOCKSIZE 512
+
 #endif /* CONSTANTS_H_ */

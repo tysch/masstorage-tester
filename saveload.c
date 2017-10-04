@@ -27,6 +27,7 @@ void load(uint32_t *seed, uint64_t *size, uint32_t *filesize)
 	{
 		if((*seed) && (*size))
 		{
+			fflush(stdin);
 			printf("\nSave file found, resume previous test (y/n)?\n");
 			c = getchar();
 			if(c == 'y')
@@ -34,7 +35,7 @@ void load(uint32_t *seed, uint64_t *size, uint32_t *filesize)
 				*seed = 0;
 				*size = 0;
 				*filesize = 0;
-
+//TODO:refine save/load logic
 				// Read last line in save file
 				while (fgets(str, 64, fp) != NULL);
 				// Parse "seed=xxxx size=xxxxxx filesize=xxxxx"

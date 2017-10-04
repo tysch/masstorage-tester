@@ -29,4 +29,6 @@ void log_init(int argc, char ** argv);
 
 void check_input_values(uint32_t seed, uint32_t iterations, uint64_t totsize, uint32_t bufsize, int iswritingtofiles);
 
+long long unsigned read_device_size(char * path);
+
 #endif /* INIT_H_ */

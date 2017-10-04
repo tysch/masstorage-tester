@@ -22,7 +22,7 @@ fec.o : fec.c fec.h print.h strconv.h constants.h
 fileio.o : fileio.c fileio.h print.h constants.h nofailio.h
 	$(CC) $(CFLAGS) -c fileio.c
 
-nofailio.o : nofailio.c nofailio.h errmesg.h constants.h
+nofailio.o : nofailio.c nofailio.h errmesg.h constants.h print.h
 	$(CC) $(CFLAGS) -c nofailio.c
 
 init.o : init.c init.h strconv.h constants.h print.h

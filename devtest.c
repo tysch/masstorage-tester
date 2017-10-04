@@ -36,7 +36,6 @@ void filldevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint3
 		    ioerrors = nofail_pwrite(fd, buf, bufsize, wrpos);
 		    byteswritten += bufsize - ioerrors;
 		    totioerrors += ioerrors;
-
 		    // Printing stats
 		    printprogress(perc, (uint64_t)(1000000.0*((double)byteswritten / count)));
 	        printprogress(writeb, byteswritten);
@@ -97,7 +96,7 @@ void readdevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint3
     uint64_t bytesread = 0;
     uint32_t ioerrors = 0;
     uint64_t totioerrors = 0;
-    uint32_t memerrors = 0;
+    uint64_t memerrors = 0;
 
     int nblocksizes = 0;
     struct fecblock * fecblocks = NULL;
@@ -125,7 +124,7 @@ void readdevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint3
 		    totioerrors += ioerrors;
 
 		    bytesread += bufsize - ioerrors;
-		    memerrors = chkbuf_dev(buf, bufsize, fecblocks, &fpos, nblocksizes, isfectesting);
+		    memerrors += chkbuf_dev(buf, bufsize, fecblocks, &fpos, nblocksizes, isfectesting);
 
             printprogress(readb, bytesread);
             printprogress(ioerror, totioerrors);

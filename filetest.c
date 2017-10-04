@@ -39,7 +39,7 @@ void fillfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_
 		ioerrors = nofail_writefile(filename, buf, bufsize);
 
 		byteswritten += bufsize - ioerrors;
-		totioerrors = ioerrors;
+		totioerrors += ioerrors;
 
 	    if (ioerrors)
 	    {
