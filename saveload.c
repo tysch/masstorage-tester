@@ -10,7 +10,7 @@
 void load(uint32_t *seed, uint64_t *size, uint32_t *filesize)
 {
 	FILE * fp = fopen("savefile.txt", "r");
-	int c;
+	int c = 0;
 	char str[64];
 	int pos = 0;
 	if(fp == NULL)
@@ -29,7 +29,7 @@ void load(uint32_t *seed, uint64_t *size, uint32_t *filesize)
 		{
 			fflush(stdin);
 			printf("\nSave file found, resume previous test (y/n)?\n");
-			c = getchar();
+			while((c != 'y') && (c != 'n') ) c = getchar();
 			if(c == 'y')
 			{
 				*seed = 0;

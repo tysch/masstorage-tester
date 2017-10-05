@@ -10,18 +10,13 @@
 #define GF 256
 
 // Minimal Reed-Solomon block being tested
-// Should be multiplier of 16
+// Must be multiplier of 4
 // Small blocks significantly slows down readbacks
 #define MIN_RS_BLOCKSIZE 256
 
-// Buffer size for R/W operations
-// First block stores total device size and seed
-// for random number generator in (bufsize/16)-modular redundancy
-// Must be multiplier of 16
+// Buffer size for reading and writing to raw devices
+// Must be multiplier of 4
 #define DISK_BUFFER 1024*1024
-
-// Number of files to find size of single file
-#define MAX_CHECKED_FILES 15
 
 // # chars in a path name including nul
 #define PATH_MAX        4096

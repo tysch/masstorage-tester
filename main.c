@@ -74,9 +74,13 @@ int main(int argc, char ** argv)
     		(totsize == 0))     // Size of device in not explicitly specified
     	totsize = read_device_size(path);
 
+    if((iswritingtofiles) &&    // Writing to a directory
+    		(totsize == 0))    	// Total size of files was not explicitly
+    	totsize = free_space_in_dir(path);
+
     check_input_values(seed, iterations, totsize, bufsize, iswritingtofiles);
 
-    if(!iswritingtofiles) print_erasure_warning(path);
+    if(!iswritingtofiles) print_erasure_warning(path, totsize);
 
     log_init(argc, argv);
 

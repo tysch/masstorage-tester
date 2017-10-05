@@ -23,12 +23,13 @@ void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , uint32
 
 enum prmode parse_cmd_mode(int argc, char ** argv);
 
-void print_erasure_warning(char * path);
+void print_erasure_warning(char * path, uint64_t size);
 
 void log_init(int argc, char ** argv);
 
 void check_input_values(uint32_t seed, uint32_t iterations, uint64_t totsize, uint32_t bufsize, int iswritingtofiles);
 
 long long unsigned read_device_size(char * path);
+uint64_t free_space_in_dir(char * path);
 
 #endif /* INIT_H_ */

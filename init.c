@@ -13,6 +13,8 @@
 #include "strconv.h"
 #include "constants.h"
 #include "print.h"
+#include <sys/statvfs.h>
+#include <errno.h>
 
 void print_usage(int arg)
 {
@@ -136,19 +138,24 @@ enum prmode parse_cmd_mode(int argc, char ** argv)
     return ret;
 }
 
-void print_erasure_warning(char * path)
+void print_erasure_warning(char * path, uint64_t size)
 {
-	//TODO: omit fdisk call
-
-    char scmd[PATH_MAX];
-    int ret;
+    char str[PATH_MAX];
+    char sizestr[32];
+    int res;
     printf("\nWARNING! All data on the device would be lost!\n");
-    strcpy(scmd, "fdisk -l | grep ");
-    strcat(scmd, path);
-    ret = system(scmd);
-    if(ret) printf("WARNING: device seems to be missing!");
+    strcpy(str, "Target device ");
+    strcat(str, path);
+    strcat(str, " with total size ");
+    bytestostr(size, sizestr);
+    strcat(str, sizestr);
+    printf("%s",str);
     printf("\nIs the device correct? y/n\n");
-    if(getchar() != 'y') exit(0);
+    res = getchar();
+    fflush(stdin);
+    if(res != 'y') exit(0);
+    else printf("\nSearching for a previous run...\n");
+    fflush(stdout);
 }
 
 void log_init(int argc, char ** argv)
@@ -216,6 +223,7 @@ long long unsigned read_device_size(char * path)
 	// Strip device name
 	path += slashpos;
 
+	// Compose /sys/class/block/sd*/size path
 	strcpy(syspath, "/sys/block");
 	strcat(syspath, path);
 	strcat(syspath, "/size");
@@ -237,4 +245,72 @@ long long unsigned read_device_size(char * path)
 	}
 	return 0;
 }
+
+uint64_t free_space_in_dir(char * path)
+{
+	uint64_t freesize = 0;
+	uint64_t blocksize;
+	uint64_t freeblocks;
+
+	struct statvfs buf;
+	char * errmesg;
+
+	int ret = statvfs(path, &buf);
+	if(ret == -1)
+	{
+		switch (errno)
+		{
+		    case EACCES:
+		    	errmesg = "\nSearch permission is denied for a component of the path prefix of path\n";
+		    	break;
+		    case EFAULT:
+		    	errmesg = "\nPath points to an invalid address.\n";
+		    	break;
+		    case EINTR:
+		    	errmesg = "\nThis call was interrupted by a signal.\n";
+		    	break;
+		    case EIO:
+		    	errmesg = "\nAn I/O error occurred while reading from the file system.\n";
+		    	break;
+		    case ELOOP:
+		    	errmesg = "\nToo many symbolic links were encountered in translating path.\n";
+		    	break;
+		    case ENAMETOOLONG:
+		    	errmesg = "\nPath is too long.\n";
+		    	break;
+		    case ENOENT:
+		    	errmesg = "\nThe file referred to by path does not exist.\n";
+		    	break;
+		    case ENOMEM:
+		    	errmesg = "\nInsufficient kernel memory was available.\n";
+		    	break;
+		    case ENOSYS:
+		    	errmesg = "\nThe file system does not support this call.\n";
+		    	break;
+		    case ENOTDIR:
+		    	errmesg = "\nA component of the path prefix of path is not a directory.\n";
+		    	break;
+		    case EOVERFLOW:
+		    	errmesg = "\nSome values were too large to be represented in the returned struct.\n";
+		    	break;
+		    default:
+		    	errmesg = "\nUnknown error.\n";
+		}
+		printf("\nUnable to determine remaining free space:");
+		printf("%s", errmesg);
+		exit(1);
+	}
+
+	blocksize = buf.f_bsize;
+	freeblocks = buf.f_bavail;
+
+	freesize = blocksize * freeblocks;
+	return freesize;
+}
+
+
+
+
+
+
 

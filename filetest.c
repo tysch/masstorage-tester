@@ -34,7 +34,7 @@ void fillfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_
 
 		fillbuf(buf, bufsize);
 
-		sprintf(filename, "%s/%llu.dat", path, (unsigned long long) i);
+		sprintf(filename, "%s/%llu.jnk", path, (unsigned long long) i);
 
 		ioerrors = nofail_writefile(filename, buf, bufsize);
 
@@ -43,7 +43,7 @@ void fillfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_
 
 	    if (ioerrors)
 	    {
-	        sprintf(errmesg, "\n%llu.dat write error\n", (unsigned long long) i);
+	        sprintf(errmesg, "\n%llu.jnk write error\n", (unsigned long long) i);
 			print(ERROR, errmesg);
 	    }
 
@@ -99,7 +99,7 @@ void readfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_
 	for(uint64_t i = 0; i < nfiles; i++)
 	{
 		if(stop_all) break;
-		sprintf(filename, "%s/%llu.dat", path, (unsigned long long) i);
+		sprintf(filename, "%s/%llu.jnk", path, (unsigned long long) i);
 
 		ioerrors = nofail_readfile(filename, buf, bufsize);
 		totioerrors += ioerrors;
@@ -110,7 +110,7 @@ void readfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_
 		if(ioerrors)
 		{
 			bytestostr(ioerrors, errsize);
-			sprintf(errmesg, "\n--------------------file %-15llu is damaged, %-9s errors\n", (unsigned long long) i, errsize);
+			sprintf(errmesg, "\n--------------------file %-15llu.jnk is damaged, %-9s errors\n", (unsigned long long) i, errsize);
 			print(ERROR, errmesg);
 		}
 
