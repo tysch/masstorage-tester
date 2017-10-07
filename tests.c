@@ -9,7 +9,7 @@
 
 extern int stop_cycling;
 
-void singlewrite_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int iswritingtofiles)
+void singlewrite_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int iswritingtofiles, int notdeletefiles)
 {
     printprogress(reset, 0);
 	printprogress(writep, 0);
@@ -24,14 +24,14 @@ void singlewrite_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, 
 	save(seed, totsize, bufsize);
 }
 
-void singleread_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int isfectesting, int iswritingtofiles)
+void singleread_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int isfectesting, int iswritingtofiles, int notdeletefiles)
 {
     printprogress(reset, 0);
 	printprogress(readp, 0);
 	load(&seed, &totsize, &bufsize);
 
     if(iswritingtofiles)
-    	readfiles(path, buf, seed, totsize, bufsize);
+    	readfiles(path, buf, seed, totsize, bufsize, notdeletefiles);
     else
     	readdevice(path, buf, bufsize, totsize, seed, isfectesting);
 
@@ -39,7 +39,7 @@ void singleread_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, u
 }
 
 void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, int isfectesting,
-             int iswritingtofiles, uint64_t totsize, uint32_t bufsize)
+             int iswritingtofiles, int notdeletefiles, uint64_t totsize, uint32_t bufsize)
 {
     printprogress(reset, 0);
     load(&seed, &totsize, &bufsize);
@@ -58,7 +58,7 @@ void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, int is
         printprogress(readp, 0);
 
         if(iswritingtofiles)
-        	readfiles(path, buf, seed, totsize, bufsize);
+        	readfiles(path, buf, seed, totsize, bufsize, notdeletefiles);
         else
         	readdevice(path, buf, bufsize, totsize, seed, isfectesting);
 

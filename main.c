@@ -39,8 +39,6 @@ void sigint_handler(int s)
     }
 }
 
-/////////////////////////////////////////////////////////////////////////////
-
 int main(int argc, char ** argv)
 {
     enum prmode mod;
@@ -52,6 +50,7 @@ int main(int argc, char ** argv)
 
     int isfectesting = 0;
     int iswritingtofiles = 0;
+    int notdeletefiles = 0;
 
     uint64_t totsize = 0;
     uint32_t bufsize = DISK_BUFFER;
@@ -66,7 +65,7 @@ int main(int argc, char ** argv)
 
     print_usage(argc);
 
-    parse_cmd_val(argc, argv, path, &seed, &iterations, &isfectesting, &iswritingtofiles, &totsize, &bufsize);
+    parse_cmd_val(argc, argv, path, &seed, &iterations, &isfectesting, &iswritingtofiles, &notdeletefiles, &totsize, &bufsize);
 
     mod = parse_cmd_mode(argc, argv);
 
@@ -81,6 +80,7 @@ int main(int argc, char ** argv)
     check_input_values(seed, iterations, totsize, bufsize, iswritingtofiles);
 
     if(!iswritingtofiles) print_erasure_warning(path, totsize);
+    else print_folder_size(totsize, bufsize);
 
     log_init(argc, argv);
 
@@ -94,19 +94,19 @@ int main(int argc, char ** argv)
     switch(mod)
     {
         case singleread:
-            singleread_f(path, buf, bufsize, totsize, seed, isfectesting, iswritingtofiles);
+            singleread_f(path, buf, bufsize, totsize, seed, isfectesting, iswritingtofiles, notdeletefiles);
             break;
 
         case singlewrite:
-            singlewrite_f(path, buf, bufsize, totsize, seed, iswritingtofiles);
+            singlewrite_f(path, buf, bufsize, totsize, seed, iswritingtofiles, notdeletefiles);
             break;
 
         case singlecycle:
-        	cycle_f(path, buf, seed, 1, isfectesting, iswritingtofiles, totsize, bufsize);
+        	cycle_f(path, buf, seed, 1, isfectesting, iswritingtofiles, notdeletefiles, totsize, bufsize);
             break;
 
         case multicycle:
-        	cycle_f(path, buf, seed, iterations, isfectesting, iswritingtofiles, totsize, bufsize);
+        	cycle_f(path, buf, seed, iterations, isfectesting, iswritingtofiles, notdeletefiles, totsize, bufsize);
             break;
     }
 

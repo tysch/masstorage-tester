@@ -12,42 +12,42 @@ extern int stop_all;
 // Fills file with a random data
 void filldevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint32_t seed)
 {
-	uint64_t byteswritten = 0;
-	time_t startrun = time(NULL);
+    uint64_t byteswritten = 0;
+    time_t startrun = time(NULL);
 
     uint32_t ioerrors = 0;
     uint64_t totioerrors = 0;
 
-	reseed(seed);
-	int fd = nofail_open(path);
-	if(fd == -1)
-	{
-		print(ERROR, "\nFatal error\n");
-		// TODO: gentle exit routine
-		exit(1);
-	}
-	else
-	{
-	    for(uint64_t wrpos = 0; wrpos < count; wrpos += bufsize)
-	    {
-		    if(stop_all) break;
-		    fillbuf(buf, bufsize);
+    reseed(seed);
+    int fd = nofail_open(path);
+    if(fd == -1)
+    {
+        print(ERROR, "\nFatal error\n");
+        exit(1);
+    }
+    else
+    {
+        for(uint64_t wrpos = 0; wrpos < count; wrpos += bufsize)
+        {
+            if(stop_all) break;
+            fillbuf(buf, bufsize);
 
-		    ioerrors = nofail_pwrite(fd, buf, bufsize, wrpos);
-		    byteswritten += bufsize - ioerrors;
-		    totioerrors += ioerrors;
-		    // Printing stats
-		    printprogress(perc, (uint64_t)(1000000.0*((double)byteswritten / count)));
-	        printprogress(writeb, byteswritten);
-	        printprogress(tbw, bufsize - ioerrors);
-	        printprogress(ioerror, totioerrors);
-		    if(time(NULL) - startrun)
-		        printprogress(wspeed, byteswritten / (time(NULL) - startrun));
-		    printprogress(show, 0);
-	    }
-	}
+            ioerrors = nofail_pwrite(fd, buf, bufsize, wrpos);
+            byteswritten += bufsize - ioerrors;
+            totioerrors += ioerrors;
+            // Printing stats
+            printprogress(perc, (uint64_t)(1000000.0*((double)byteswritten / count)));
+            printprogress(mmerr, 0); //All data at write moment is considered correct
+            printprogress(writeb, byteswritten);
+            printprogress(tbw, bufsize - ioerrors);
+            printprogress(ioerror, totioerrors);
+            if(time(NULL) - startrun)
+                printprogress(wspeed, byteswritten / (time(NULL) - startrun));
+            printprogress(show, 0);
+        }
+    }
 
-	nofail_close(fd);
+    nofail_close(fd);
     printprogress(log, 0);
 }
 
@@ -104,27 +104,26 @@ void readdevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint3
 
     time_t startrun = time(NULL);
 
-	int fd = nofail_open(path);
-	if(fd == -1)
-	{
-		print(ERROR, "\nFatal error\n");
-		// TODO: gentle exit routine
-		exit(1);
-	}
-	else
-	{
-	    reseed(seed);
+    int fd = nofail_open(path);
+    if(fd == -1)
+    {
+        print(ERROR, "\nFatal error\n");
+        exit(1);
+    }
+    else
+    {
+        reseed(seed);
 
-	    if(isfectesting) fecblocks = fectest_init(count, &nblocksizes);
+        if(isfectesting) fecblocks = fectest_init(count, &nblocksizes);
 
-		for(uint64_t rdpos = 0; rdpos < count; rdpos += bufsize)
-	    {
-		    if(stop_all) break;
-		    ioerrors = nofail_pread(fd, buf, bufsize, rdpos);
-		    totioerrors += ioerrors;
+        for(uint64_t rdpos = 0; rdpos < count; rdpos += bufsize)
+        {
+            if(stop_all) break;
+            ioerrors = nofail_pread(fd, buf, bufsize, rdpos);
+            totioerrors += ioerrors;
 
-		    bytesread += bufsize - ioerrors;
-		    memerrors += chkbuf_dev(buf, bufsize, fecblocks, &fpos, nblocksizes, isfectesting);
+            bytesread += bufsize - ioerrors;
+            memerrors += chkbuf_dev(buf, bufsize, fecblocks, &fpos, nblocksizes, isfectesting);
 
             printprogress(readb, bytesread);
             printprogress(ioerror, totioerrors);
@@ -134,11 +133,11 @@ void readdevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint3
                 printprogress(rspeed, bytesread / (time(NULL) - startrun));
             printprogress(show, 0);
 
-	    }
-	}
+        }
+    }
 
-	nofail_close(fd);
-	printprogress(log, 0);
+    nofail_close(fd);
+    printprogress(log, 0);
 
     if(isfectesting)
     {

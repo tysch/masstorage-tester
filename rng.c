@@ -1,6 +1,5 @@
 /*
  * rng.c
- *
  */
 
 #include <stdint.h>

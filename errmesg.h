@@ -1,6 +1,5 @@
 /*
  * errmesg.h
- *
  */
 
 #ifndef ERRMESG_H_

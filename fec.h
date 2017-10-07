@@ -1,6 +1,5 @@
 /*
  * fec.h
- *
  */
 
 #ifndef FEC_H_

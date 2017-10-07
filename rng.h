@@ -1,6 +1,5 @@
 /*
  * rng.h
- *
  */
 
 #ifndef RNG_H_

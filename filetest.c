@@ -16,45 +16,45 @@ extern int stop_all;
 
 void fillfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_t bufsize)
 {
-	char filename[PATH_MAX + 24];
-	char errmesg[128];
+    char filename[PATH_MAX + 24];
+    char errmesg[128];
 
-	uint64_t nfiles = totsize / bufsize;
-	time_t startrun = time(NULL);
-	uint64_t byteswritten = 0;
+    uint64_t nfiles = totsize / bufsize;
+    time_t startrun = time(NULL);
+    uint64_t byteswritten = 0;
 
-	uint32_t ioerrors = 0;
-	uint64_t totioerrors = 0;
+    uint32_t ioerrors = 0;
+    uint64_t totioerrors = 0;
 
-	reseed(seed);
+    reseed(seed);
 
-	for(uint64_t i = 0; i < nfiles; i++)
-	{
-		if(stop_all) break;
+    for(uint64_t i = 0; i < nfiles; i++)
+    {
+        if(stop_all) break;
 
-		fillbuf(buf, bufsize);
+        fillbuf(buf, bufsize);
 
-		sprintf(filename, "%s/%llu.jnk", path, (unsigned long long) i);
+        sprintf(filename, "%s/%lli.jnk", path, (long long) i);
+        ioerrors = nofail_writefile(filename, buf, bufsize);
 
-		ioerrors = nofail_writefile(filename, buf, bufsize);
+        byteswritten += bufsize - ioerrors;
+        totioerrors += ioerrors;
 
-		byteswritten += bufsize - ioerrors;
-		totioerrors += ioerrors;
+        if (ioerrors)
+        {
+            sprintf(errmesg, "\n%lli.jnk write error\n", (long long) i);
+            print(ERROR, errmesg);
+        }
 
-	    if (ioerrors)
-	    {
-	        sprintf(errmesg, "\n%llu.jnk write error\n", (unsigned long long) i);
-			print(ERROR, errmesg);
-	    }
-
-	    printprogress(writeb, byteswritten);
-	    printprogress(ioerror, totioerrors);
+        printprogress(writeb, byteswritten);
+        printprogress(mmerr, 0); //All data at write moment is considered correct
+        printprogress(ioerror, totioerrors);
         printprogress(tbw, bufsize);
         if(time(NULL) - startrun)
             printprogress(wspeed, byteswritten / (time(NULL) - startrun));
         printprogress(show, 0);
         printprogress(perc, (uint64_t)(1000000.0*((double)(i + 1) / nfiles)));
-	}
+    }
 
     printprogress(log, 0);
 }
@@ -79,52 +79,49 @@ uint32_t chkbuf_file(char * buf, uint32_t bufsize)
 }
 
 
-void readfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_t bufsize)
+void readfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_t bufsize, int notdeletefiles)
 {
 
-	char filename[PATH_MAX + 24];
-	char errmesg[128];
-	char errsize[24];
+    char filename[PATH_MAX + 24];
+    char errmesg[128];
+    char errsize[24];
 
-	uint64_t nfiles = totsize / bufsize;
-	time_t startrun = time(NULL);
-	uint64_t bytesread = 0;
+    uint64_t nfiles = totsize / bufsize;
+    time_t startrun = time(NULL);
+    uint64_t bytesread = 0;
 
-	uint32_t ioerrors = 0;
-	uint64_t totioerrors = 0;
-	uint64_t memerrors = 0;
+    uint32_t ioerrors = 0;
+    uint64_t totioerrors = 0;
+    uint64_t memerrors = 0;
 
-	reseed(seed);
+    reseed(seed);
 
-	for(uint64_t i = 0; i < nfiles; i++)
-	{
-		if(stop_all) break;
-		sprintf(filename, "%s/%llu.jnk", path, (unsigned long long) i);
+    for(uint64_t i = 0; i < nfiles; i++)
+    {
+        if(stop_all) break;
+        sprintf(filename, "%s/%lli.jnk", path, (long long) i);
 
-		ioerrors = nofail_readfile(filename, buf, bufsize);
-		totioerrors += ioerrors;
-		bytesread += bufsize - ioerrors;
-		memerrors += chkbuf_file(buf, bufsize);
+        ioerrors = nofail_readfile(filename, buf, bufsize, notdeletefiles);
+        totioerrors += ioerrors;
+        bytesread += bufsize - ioerrors;
+        memerrors += chkbuf_file(buf, bufsize);
 
+        if(ioerrors)
+        {
+            bytestostr(ioerrors, errsize);
+            sprintf(errmesg, "\n--------------------file %-15lli.jnk is damaged, %-9s errors\n", (long long) i, errsize);
+            print(ERROR, errmesg);
+        }
 
-		if(ioerrors)
-		{
-			bytestostr(ioerrors, errsize);
-			sprintf(errmesg, "\n--------------------file %-15llu.jnk is damaged, %-9s errors\n", (unsigned long long) i, errsize);
-			print(ERROR, errmesg);
-		}
+        printprogress(readb, bytesread);
+        printprogress(perc, (uint64_t)(1000000.0*((double)(i + 1) / nfiles)));
+        printprogress(mmerr, memerrors);
+        printprogress(ioerror, totioerrors);
+        if(time(NULL) - startrun)
+            printprogress(rspeed, bytesread / (time(NULL) - startrun));
+        printprogress(show, 0);
+    }
 
-		// TODO: per-run error counting
-
-		printprogress(readb, bytesread);
-	    printprogress(perc, (uint64_t)(1000000.0*((double)(i + 1) / nfiles)));
-		printprogress(mmerr, memerrors);
-		printprogress(ioerror, totioerrors);
-		if(time(NULL) - startrun)
-		    printprogress(rspeed, bytesread / (time(NULL) - startrun));
-		printprogress(show, 0);
-	}
-	printprogress(log, 0);
+    printprogress(log, 0);
 }
-
 

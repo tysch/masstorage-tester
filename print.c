@@ -12,38 +12,37 @@
 
 void print(enum print_mode action, const char * string)
 {
-	static FILE * logfile = NULL;
-	static int islogging = 0;
+    static FILE * logfile = NULL;
+    static int islogging = 0;
 
-	switch (action)
-	{
+    switch (action)
+    {
         case LOGFILE_INIT :
 
-        	logfile = fopen(string, "w");
-        	if(logfile == NULL)
+            logfile = fopen(string, "w");
+            if(logfile == NULL)
             {
-
-            	printf("\nCannot create logfile\n");
+                printf("\nCannot create logfile\n");
                 fflush(stdout);
                 exit(1);
             }
             islogging = 1;
             break;
 
-	    case LOGFILE_EXIT :
-	    	if(islogging) fclose(logfile);
+        case LOGFILE_EXIT :
+            if(islogging) fclose(logfile);
             break;
 
-	    case ERROR :
+        case ERROR :
             printf("%s", string);
             fflush(stdout);
             if(islogging) fprintf(logfile, "%s", string);
             break;
 
-	    case LOG :
+        case LOG :
             if(islogging) fprintf(logfile, "%s", string);
             break;
-	}
+    }
 }
 
 // Prints and logs status
@@ -105,7 +104,7 @@ void printprogress(enum print_val prflag , uint64_t val)
             break;
 
         case ioerror :
-        	ioerrors = val;
+           ioerrors = val;
             bytestostr(ioerrors, ioerrstr);
             break;
 

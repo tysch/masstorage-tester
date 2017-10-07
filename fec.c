@@ -1,6 +1,5 @@
 /*
  * fec.c
- *
  */
 
 #include <stdint.h>
@@ -83,7 +82,7 @@ void print_fec_summary(struct fecblock * fecblocks, int nblocksizes)
 
     if(iserror)
     {
-    	print(ERROR, "\n Forward error correction code requirements:\n");
+        print(ERROR, "\n Forward error correction code requirements:\n");
 
         for(int i = 0; i < nblocksizes; i++)
         {
@@ -92,8 +91,8 @@ void print_fec_summary(struct fecblock * fecblocks, int nblocksizes)
 
             if(spareblocks >= GF/2)
             {
-            	sprintf(str, "block size: %-12s -- insufficient block size\n", bsstr);
-            	print(ERROR, str);
+                sprintf(str, "block size: %-12s -- insufficient block size\n", bsstr);
+                print(ERROR, str);
             }
             else
             {

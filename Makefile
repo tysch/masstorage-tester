@@ -1,8 +1,10 @@
 CFLAGS= -Wall -O1 -Wno-parentheses -std=c99 -D_POSIX_C_SOURCE
 CC = gcc
 
-massstoragetester : main.o main.o tests.o devtest.o filetest.o fec.o rng.o print.o init.o strconv.o errmesg.o fileio.o nofailio.o saveload.o
-	$(CC) $(CFLAGS) -o massstoragetester main.o tests.o devtest.o filetest.o fec.o rng.o print.o init.o strconv.o errmesg.o fileio.o nofailio.o saveload.o
+massstoragetester : main.o main.o tests.o devtest.o filetest.o fec.o rng.o print.o\
+                    init.o strconv.o errmesg.o fileio.o nofailio.o saveload.o
+	$(CC) $(CFLAGS) -o massstoragetester main.o tests.o devtest.o filetest.o\
+                           fec.o rng.o print.o init.o strconv.o errmesg.o fileio.o nofailio.o saveload.o
 
 main.o : main.c init.h print.h constants.h tests.h
 	$(CC) $(CFLAGS) -c main.c
@@ -41,7 +43,7 @@ print.o : print.c print.h strconv.h
 	$(CC) $(CFLAGS) -c print.c
 
 strconv.o : strconv.c strconv.h
-	$(CC) $(CFLAGS) -c strconv.c	
+	$(CC) $(CFLAGS) -c strconv.c
 
 clean :
 	rm -f *.o massstoragetester

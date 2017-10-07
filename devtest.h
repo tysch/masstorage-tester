@@ -1,6 +1,5 @@
 /*
  * devtest.h
- *
  */
 
 #ifndef DEVTEST_H_
