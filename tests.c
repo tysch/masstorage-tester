@@ -14,8 +14,6 @@ void singlewrite_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, 
     printprogress(reset, 0);
 	printprogress(writep, 0);
 
-	//load(&seed, &totsize, &bufsize);
-
     if(iswritingtofiles)
     	fillfiles(path, buf, seed, totsize, bufsize);
     else
@@ -34,8 +32,6 @@ void singleread_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, u
     	readfiles(path, buf, seed, totsize, bufsize, notdeletefiles);
     else
     	readdevice(path, buf, bufsize, totsize, seed, isfectesting);
-
-    //save(seed, totsize, bufsize);
 }
 
 void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, int isfectesting,
@@ -64,8 +60,6 @@ void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, int is
 
         printprogress(count, 0);
         seed++;
-
-        //save(seed, totsize, bufsize);
     }
     while ((!stop_cycling) && iterations);
 }

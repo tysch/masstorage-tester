@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <time.h>
 #include "init.h"
 #include "strconv.h"
@@ -26,26 +27,31 @@ void print_usage(int arg)
         printf("\n           If not set, massstoragetester would fill entire device or all free space in target location.");
         printf("\n           Please note that files may have filesystem-specific storage overhead and automatic free space estimation");
         printf("\n           while setting file size too small may cause overflow. It shoudn't be considered as a bug.");
+        printf("\n");
         printf("\n -o     -- Single read/write cycle, for speed and volume measurement, default.");
         printf("\n -c     -- <iterations> read/write cycles, for endurance tests.");
         printf("\n -w     -- Single write only.");
         printf("\n -r     -- Single read only.");
         printf("\n           -w, -r are useful for long term data retention tests.");
         printf("\n           -w and -r must be launched with the same salt.");
+        printf("\n");
+        printf("\n -f     -- Write to a bunch of files instead of device with defined size.");
+        printf("\n           Single file should be less than 2 GiB and no more than total data size.");
+        printf("\n");
         printf("\n -i     -- Non-zero integer salt for random data being written, default 1.");
         printf("\n --fec  -- Estimates Reed-Solomon forward error correction code requirement for raw device.");
         printf(" for GF=256,\n           spare blocks count vs block size.");
-        printf("\n -f     -- Write to a bunch of files instead of device with defined size.");
-        printf("\n           Single file should be less than 2 GiB and no more than total data size.");
         printf("\n           Total file size can be rounded down to a more optimal values.");
         printf("\n -p     -- Do not clean up files while reading back in in file test mode.");
-        printf("\n           Useful for long-term storage reliability testing.\n\n");
+        printf("\n           Useful for long-term storage reliability testing.");
+        printf("\n -h     -- Skip all confirmations and start a new test in background.");
+        printf("\n\n.");
         exit(1);
     }
 }
 
 void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , uint32_t * iterations, int *isfectesting,
-                   int *iswritingtofiles, int *notdeletefiles, uint64_t * totsize, uint32_t * filesize)
+                   int *iswritingtofiles, int *notdeletefiles, int * headless, uint64_t * totsize, uint32_t * filesize)
 {
     uint32_t filesiz;
 
@@ -98,11 +104,19 @@ void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , uint32
         if(strcmp(argv[i], "--fec") == 0) *isfectesting = 1;
 
         if(strcmp(argv[i], "-p") == 0) *notdeletefiles = 1;
+        if(strcmp(argv[i], "-h") == 0) *headless = 1;
     }
 
-	if(strcmp(path, ".") == 0)
+	if(strcmp(path, "-") == 0)
 	{
         printf("\n No directory or device specified, exiting now\n");
+        fflush(stdout);
+        exit(1);
+	}
+
+	if(((path[0] != '/') && (*isfectesting == 1)))
+	{
+        printf("\nBackground runs require absolute path to the file/device.\n");
         fflush(stdout);
         exit(1);
 	}
@@ -323,3 +337,35 @@ void print_folder_size(uint64_t totsize, uint32_t bufsize)
     printf("\nTesting %s free space\n", sizestr);
 }
 
+void make_daemon(void)
+{
+	pid_t pid;
+	// create new process
+	pid = fork ( );
+	if(pid == -1)
+	{
+		printf("\nFauled to create a daemon process\n");
+		exit(1);
+	}
+	else if(pid != 0)
+	{
+			printf("\nGoint to the background\n");
+			exit(EXIT_SUCCESS);
+	}
+
+	// create new session and process group
+	if (setsid() == -1) exit(1);
+
+	// set the working directory to the root directory
+	if (chdir ("/") == -1) exit(1);
+
+	// close stdin, stdout and stderr
+	close(STDIN_FILENO);
+	close(STDOUT_FILENO);
+	close(STDERR_FILENO);
+
+	// redirect fd's 0,1,2 to /dev/null
+	open ("/dev/null", O_RDWR);
+	open ("/dev/null", O_RDWR);
+	open ("/dev/null", O_RDWR);
+}

@@ -13,6 +13,8 @@
 int stop_cycling = 0;
 int stop_all = 0;
 
+int headless = 0;
+
 struct sigaction old_action;
 
 void sigint_handler(int s)
@@ -42,8 +44,9 @@ void sigint_handler(int s)
 int main(int argc, char ** argv)
 {
     enum prmode mod;
+    struct sigaction siginthandler;
 
-    char path[PATH_MAX] = ".";      // Path to device or directory with files being tested
+    char path[PATH_MAX] = "-";      // Path to device or directory with files being tested
 
     uint32_t seed = 1;
     uint32_t iterations = 1;
@@ -57,30 +60,35 @@ int main(int argc, char ** argv)
 
     char * buf;
 
-    struct sigaction siginthandler;
-    siginthandler.sa_handler = sigint_handler;
-    sigemptyset(&siginthandler.sa_mask);
-    siginthandler.sa_flags = 0;
-    sigaction(SIGINT, &siginthandler, NULL);
-
     print_usage(argc);
 
-    parse_cmd_val(argc, argv, path, &seed, &iterations, &isfectesting, &iswritingtofiles, &notdeletefiles, &totsize, &bufsize);
+    parse_cmd_val(argc, argv, path, &seed, &iterations, &isfectesting, &iswritingtofiles, &notdeletefiles, &headless, &totsize, &bufsize);
+
+    // Daemonize application
+    if(headless) make_daemon();
+    else // Enable Ctrl+C interrupts
+    {
+    	siginthandler.sa_handler = sigint_handler;
+    	sigemptyset(&siginthandler.sa_mask);
+    	siginthandler.sa_flags = 0;
+    	sigaction(SIGINT, &siginthandler, NULL);
+    }
 
     mod = parse_cmd_mode(argc, argv);
 
-    if((!iswritingtofiles) &&   // Writing to device
-    		(totsize == 0))     // Size of device in not explicitly specified
-    	totsize = read_device_size(path);
-
-    if((iswritingtofiles) &&    // Writing to a directory
-    		(totsize == 0))    	// Total size of files was not explicitly
-    	totsize = free_space_in_dir(path);
+    if(totsize == 0) // Size of device/file in not explicitly specified
+    {
+        if(iswritingtofiles) totsize = free_space_in_dir(path);
+        else                 totsize = read_device_size(path);
+    }
 
     check_input_values(seed, iterations, totsize, bufsize, iswritingtofiles);
 
-    if(!iswritingtofiles) print_erasure_warning(path, totsize);
-    else print_folder_size(totsize, bufsize);
+    if(!headless)
+    {
+        if(iswritingtofiles) print_folder_size(totsize, bufsize);
+        else                 print_erasure_warning(path, totsize);
+    }
 
     log_init(argc, argv);
 

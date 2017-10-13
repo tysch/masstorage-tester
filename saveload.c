@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+extern int headless;
+
 // Loads previous seed and size information
 // Format: seed=uint32_t size=uint64_t
 void load(uint32_t *seed, uint64_t *size, uint32_t *filesize)
@@ -25,7 +27,7 @@ void load(uint32_t *seed, uint64_t *size, uint32_t *filesize)
 	}
 	else
 	{
-		if((*seed) && (*size))
+		if((*seed) && (*size) && (!headless))
 		{
 			fflush(stdin);
 			printf("\nSave file found, resume previous test (y/n)?\n");
