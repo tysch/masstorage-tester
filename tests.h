@@ -6,11 +6,10 @@
 #ifndef TESTS_H_
 #define TESTS_H_
 
-void singlewrite_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int iswritingtofiles, int notdeletefiles);
+void singlewrite_f(char * buf, struct options_s * options);
 
-void singleread_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int isfectesting, int iswritingtofiles, int notdeletefiles);
+void singleread_f(char * buf, struct options_s * options);
 
-void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, int isfectesting,
-             int iswritingtofiles, int notdeletefiles, uint64_t totsize, uint32_t bufsize);
+void cycle_f(char * buf, struct options_s * options);
 
 #endif /* TESTS_H_ */

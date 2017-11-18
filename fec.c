@@ -71,8 +71,8 @@ void print_fec_summary(struct fecblock * fecblocks, int nblocksizes)
 {
     int spareblocks;
     double overhead;
-    char bsstr[20];
-    char str[100];
+    char bsstr[DIGITS_MAX];
+    char str[5 * DIGITS_MAX];
     int iserror = 0; // do not print summary if there are no errors
 
     for(int i = 0; i < nblocksizes; i++)
@@ -82,7 +82,7 @@ void print_fec_summary(struct fecblock * fecblocks, int nblocksizes)
 
     if(iserror)
     {
-        print(ERROR, "\n Forward error correction code requirements:\n");
+        print(OUT, "\n Forward error correction code requirements:\n");
 
         for(int i = 0; i < nblocksizes; i++)
         {
@@ -92,13 +92,13 @@ void print_fec_summary(struct fecblock * fecblocks, int nblocksizes)
             if(spareblocks >= GF/2)
             {
                 sprintf(str, "block size: %-12s -- insufficient block size\n", bsstr);
-                print(ERROR, str);
+                print(OUT, str);
             }
             else
             {
                 overhead = 100.0 * (double) spareblocks / GF;
                 sprintf(str, "block size: %-12s  spare blocks: %-3i  overhead: %.1f%%\n", bsstr, spareblocks, overhead);
-                print(ERROR, str);
+                print(OUT, str);
             }
         }
     }

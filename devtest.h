@@ -4,11 +4,12 @@
 
 #ifndef DEVTEST_H_
 #define DEVTEST_H_
+#include "options.h"
 
 // Fills device with a random data, measured device size and RNG seed information
-void filldevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint32_t seed);
+void filldevice(char * buf, struct options_s * option);
 
 // Reads and checks written data to the device
-void readdevice(char * path, char * buf, uint32_t bufsize, uint64_t count, uint32_t seed, int isfectesting);
+void readdevice(char * buf, struct options_s * option);
 
 #endif /* DEVTEST_H_ */

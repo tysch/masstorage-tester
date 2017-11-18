@@ -6,31 +6,31 @@ massstoragetester : main.o main.o tests.o devtest.o filetest.o fec.o rng.o print
 	$(CC) $(CFLAGS) -o massstoragetester main.o tests.o devtest.o filetest.o\
                            fec.o rng.o print.o init.o strconv.o errmesg.o fileio.o nofailio.o saveload.o
 
-main.o : main.c init.h print.h constants.h tests.h
+main.o : main.c init.h print.h constants.h tests.h options.h
 	$(CC) $(CFLAGS) -c main.c
 
-tests.o : tests.c print.h devtest.h filetest.h saveload.h
+tests.o : tests.c print.h devtest.h filetest.h saveload.h options.h
 	$(CC) $(CFLAGS) -c tests.c
 
-filetest.o : filetest.c filetest.h fileio.h strconv.h constants.h print.h rng.h
+filetest.o : filetest.c filetest.h fileio.h strconv.h constants.h print.h rng.h init.h
 	$(CC) $(CFLAGS) -c filetest.c
 
-devtest.o : devtest.c print.h nofailio.h fec.h rng.h
+devtest.o : devtest.c print.h nofailio.h fec.h rng.h options.h
 	$(CC) $(CFLAGS) -c devtest.c
 
 fec.o : fec.c fec.h print.h strconv.h constants.h
 	$(CC) $(CFLAGS) -c fec.c
 
-fileio.o : fileio.c fileio.h print.h constants.h nofailio.h
+fileio.o : fileio.c fileio.h print.h constants.h nofailio.h errmesg.h
 	$(CC) $(CFLAGS) -c fileio.c
 
 nofailio.o : nofailio.c nofailio.h errmesg.h constants.h print.h
 	$(CC) $(CFLAGS) -c nofailio.c
 
-init.o : init.c init.h strconv.h constants.h print.h
+init.o : init.c init.h strconv.h constants.h print.h options.h
 	$(CC) $(CFLAGS) -c init.c
 
-saveload.o : saveload.c saveload.h
+saveload.o : saveload.c saveload.h options.h
 	$(CC) $(CFLAGS) -c saveload.c
 
 rng.o : rng.c constants.h

@@ -4,9 +4,10 @@
 
 #ifndef FILETEST_H_
 #define FILETEST_H_
+#include "options.h"
 
-void fillfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_t bufsize);
+void fillfiles(char * buf, struct options_s * options);
 
-void readfiles(char * path, char * buf, uint32_t seed, uint64_t totsize, uint32_t bufsize, int notdeletefiles);
+void readfiles(char * buf, struct options_s * options);
 
 #endif /* FILETEST_H_ */

@@ -11,7 +11,9 @@
 enum print_mode
 {
     LOGFILE_INIT,
+    ERRCNT_INIT,
     LOGFILE_EXIT,
+    OUT,
     ERROR,
     LOG
 };

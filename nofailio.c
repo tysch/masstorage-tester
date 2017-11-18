@@ -3,37 +3,36 @@
  *
  */
 #define _XOPEN_SOURCE 500
-#include <unistd.h>
 #include <stdint.h>
-#include <fcntl.h>
 #include <stdio.h>
+#include <errno.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "errmesg.h"
 #include "constants.h"
 #include "print.h"
-#include <errno.h>
 
-
-static char errmesg[1024];
+static char errmesg[PATH_LENGTH];
 
 void nofail_fsync(int fd)
 {
     int err = fsync(fd);
     if(err == -1)
     {
-    printfsyncerr();
+        printerr("\nFile/device sync error:");
     }
 }
 
 int nofail_open(char * path)
 {
-    int fd = open(path, O_RDWR | O_SYNC | O_CREAT, 0666);
+    int fd = open64(path, O_RDWR | O_SYNC | O_CREAT, 0666);
 
-    if(fd == -1) printopenerr();
+    if(fd == -1) printerr("\nFile/device open error:");
     if((fd == -1) && (errno == EROFS))
     {
         print(ERROR, "\nCannot open file/device for reading and writing, falling back to read-only\n");
         fd = open(path, O_RDONLY);
-        if(fd == -1) printopenerr();
+        if(fd == -1) printerr("\nFile/device open error:");
     }
 
     return fd;
@@ -42,24 +41,25 @@ int nofail_open(char * path)
 void nofail_close(int fd)
 {
     int ret = close(fd);
-    if(ret == -1) printcloseerr();
+    if(ret == -1) printerr("\nFile/device close error:");
 }
 
-void nofail_unlink(char * path)
+int nofail_unlink(char * path)
 {
     int ret = unlink(path);
-    if(ret == -1) printunlinkerr();
+    if(ret == -1) printerr("\nFile remove error:");
+    return ret;
 }
 
 // Error-tolerant pread() ; returns bytes lost by i/o errors and pads them with zeroes
-uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, off_t offset)
+uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
 {
     char * offtbuf;
     uint32_t bufpos;
     uint32_t remsize;
 
     int32_t res;
-    off_t curr_pos;
+    uint64_t curr_pos;
 
     uint32_t padzero_start = 0;
     uint32_t padzero_end = 0;
@@ -109,7 +109,7 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, off_t offset)
                       )
                   )
                 {
-                    if(errno == EIO) printpreaderr(); // Warn about hardware error
+                    if(errno == EIO) printerr("\nFile/device read error:"); // Warn about hardware error
                     res = pread(fd, offtbuf, remsize, curr_pos);
                 }
                 else break; // Error is too serious to retry
@@ -130,7 +130,7 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, off_t offset)
                                                     (unsigned long long) curr_pos, skipbytes);
             print(ERROR, errmesg);
 
-            printpreaderr(); //Print error message
+            printerr("\nFile/device read error:");  //Print error message
 
             // Pad next SKIP_BYTES with zeroes and move forward
             padzero_start = bufpos;
@@ -154,14 +154,14 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, off_t offset)
 }
 
 // Error-tolerant pwrite() ; returns bytes that was failed to be written
-uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, off_t offset)
+uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
 {
     char * offtbuf;
     uint32_t bufpos;
     uint32_t remsize;
 
     int32_t res;
-    off_t curr_pos;
+    uint64_t curr_pos;
 
     uint32_t skipbytes = SKIP_BYTES; //initial count of bytes to skip
 
@@ -212,7 +212,7 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, off_t offset)
                       )
                   )
                 {
-                    if(errno == EIO) printpwriteerr(); // Warn about hardware error
+                    if(errno == EIO) printerr("\nFile/device write error:");  // Warn about hardware error
                     res = pwrite(fd, offtbuf, remsize, curr_pos);
                 }
                 else break; // Error is too serious to retry
@@ -231,7 +231,7 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, off_t offset)
             sprintf(errmesg, "\rError: cannot write block starting at %llu, skipping %i bytes ",
                                                        (unsigned long long) curr_pos, skipbytes);
             print(ERROR, errmesg);
-            printpwriteerr(); //Print error message
+            printerr("\nFile/device write error:"); //Print error message
 
             // Skip next skipbytes and move forward
 

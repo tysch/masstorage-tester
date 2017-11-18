@@ -6,60 +6,72 @@
 #include "devtest.h"
 #include "filetest.h"
 #include "saveload.h"
+#include "options.h"
 
 extern int stop_cycling;
+extern int stop_all;
 
-void singlewrite_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int iswritingtofiles, int notdeletefiles)
+void singlewrite_f(char * buf, struct options_s * options)
 {
     printprogress(reset, 0);
 	printprogress(writep, 0);
 
-    if(iswritingtofiles)
-    	fillfiles(path, buf, seed, totsize, bufsize);
+    if(options->iswritingtofiles)
+    	fillfiles(buf, options);
     else
-    	filldevice(path, buf, bufsize, totsize, seed);
+    	filldevice(buf, options);
 
-	save(seed, totsize, bufsize);
+    if(stop_all) return;
+	if(options->islogging) save(options);
 }
 
-void singleread_f(char * path, char * buf, uint32_t bufsize, uint64_t totsize, uint32_t seed, int isfectesting, int iswritingtofiles, int notdeletefiles)
+void singleread_f(char * buf, struct options_s * options)
 {
     printprogress(reset, 0);
 	printprogress(readp, 0);
-	load(&seed, &totsize, &bufsize);
 
-    if(iswritingtofiles)
-    	readfiles(path, buf, seed, totsize, bufsize, notdeletefiles);
+	if(options->islogging) load(options);
+	if(stop_all) return;
+
+    if(options->iswritingtofiles)
+    	readfiles(buf, options);
     else
-    	readdevice(path, buf, bufsize, totsize, seed, isfectesting);
+    	readdevice(buf, options);
 }
 
-void cycle_f(char * path, char * buf, uint32_t seed, uint32_t iterations, int isfectesting,
-             int iswritingtofiles, int notdeletefiles, uint64_t totsize, uint32_t bufsize)
+void cycle_f(char * buf, struct options_s * options)
 {
-    printprogress(reset, 0);
-    load(&seed, &totsize, &bufsize);
+	printprogress(reset, 0);
+    if(options->islogging) load(options);
+
+    if(stop_all) return;
 	do
     {
-        iterations--;
-
+		if(stop_all) break;
+		options->iterations--;
         printprogress(writep, 0);
-        if(iswritingtofiles)
-        	fillfiles(path, buf, seed, totsize, bufsize);
-        else
-        	filldevice(path, buf, bufsize, totsize, seed);
 
-        save(seed, totsize, bufsize);
+        if(options->iswritingtofiles)
+        	fillfiles(buf, options);
+        else
+        	filldevice(buf, options);
+
+        if(stop_all) break;
+
+        if(options->islogging) save(options);
+        if(stop_all) break;
 
         printprogress(readp, 0);
 
-        if(iswritingtofiles)
-        	readfiles(path, buf, seed, totsize, bufsize, notdeletefiles);
+        if(options->iswritingtofiles)
+        	readfiles(buf, options);
         else
-        	readdevice(path, buf, bufsize, totsize, seed, isfectesting);
+        	readdevice(buf, options);
+
+        if(stop_all) break;
 
         printprogress(count, 0);
-        seed++;
+        options->seed++;
     }
-    while ((!stop_cycling) && iterations);
+    while ((!stop_cycling) && options->iterations);
 }

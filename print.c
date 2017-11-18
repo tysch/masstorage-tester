@@ -10,37 +10,75 @@
 #include "print.h"
 #include "strconv.h"
 
+extern int stop_all;
+
 void print(enum print_mode action, const char * string)
 {
     static FILE * logfile = NULL;
     static int islogging = 0;
+    static long long errorcount = 0;
+    static long long errcntmax = 0;
+    if((errcntmax) &&(errorcount > errcntmax))
+    {
+        printf("\nToo many i/o errors happened, exiting now...\n");
+        fflush(stdout);
+        if(islogging)
+        {
+            fprintf(logfile, "\nToo many i/o errors happened, exiting now...\n");
+            fflush(logfile);
+        }
+        // Stop test routine and gentle exit
+        stop_all = 1;
+    }
 
     switch (action)
     {
         case LOGFILE_INIT :
-
             logfile = fopen(string, "w");
             if(logfile == NULL)
             {
                 printf("\nCannot create logfile\n");
                 fflush(stdout);
-                exit(1);
+                exit(EXIT_FAILURE);
             }
             islogging = 1;
+            break;
+
+        case ERRCNT_INIT :
+        	sscanf(string, "%lli", &errcntmax);
             break;
 
         case LOGFILE_EXIT :
             if(islogging) fclose(logfile);
             break;
 
-        case ERROR :
+        case OUT :
             printf("%s", string);
             fflush(stdout);
-            if(islogging) fprintf(logfile, "%s", string);
+            if(islogging)
+            {
+                fprintf(logfile, "%s", string);
+                fflush(logfile);
+            }
+            break;
+
+        case ERROR :
+            errorcount++;
+        	printf("%s", string);
+            fflush(stdout);
+            if(islogging) 
+            {
+                fprintf(logfile, "%s", string);
+                fflush(logfile);
+            }
             break;
 
         case LOG :
-            if(islogging) fprintf(logfile, "%s", string);
+            if(islogging)
+            {
+                fprintf(logfile, "%s", string);
+                fflush(logfile);
+            }
             break;
     }
 }

@@ -21,111 +21,145 @@ void print_usage(int arg)
 {
     if(arg < 3)
     {
-        printf("\n\nUsage: -d <path> [-s  <total size[kKmMgGt]>] [-o|r|w|c <iterations>] [-i <salt>][--fec] [-f <file size[kKmMgGt]> [-p]]\n");
-        printf("\n -d     -- Path to test device or file.");
-        printf("\n -s     -- Total bytes count to be written, rounded down to the size of a buffer.");
-        printf("\n           If not set, massstoragetester would fill entire device or all free space in target location.");
-        printf("\n           Please note that files may have filesystem-specific storage overhead and automatic free space estimation");
-        printf("\n           while setting file size too small may cause overflow. It shoudn't be considered as a bug.");
-        printf("\n");
-        printf("\n -o     -- Single read/write cycle, for speed and volume measurement, default.");
-        printf("\n -c     -- <iterations> read/write cycles, for endurance tests.");
-        printf("\n -w     -- Single write only.");
-        printf("\n -r     -- Single read only.");
-        printf("\n           -w, -r are useful for long term data retention tests.");
-        printf("\n           -w and -r must be launched with the same salt.");
-        printf("\n");
-        printf("\n -f     -- Write to a bunch of files instead of device with defined size.");
-        printf("\n           Single file should be less than 2 GiB and no more than total data size.");
-        printf("\n");
-        printf("\n -i     -- Non-zero integer salt for random data being written, default 1.");
-        printf("\n --fec  -- Estimates Reed-Solomon forward error correction code requirement for raw device.");
-        printf(" for GF=256,\n           spare blocks count vs block size.");
-        printf("\n           Total file size can be rounded down to a more optimal values.");
-        printf("\n -p     -- Do not clean up files while reading back in in file test mode.");
-        printf("\n           Useful for long-term storage reliability testing.");
-        printf("\n -h     -- Skip all confirmations and start a new test in background.");
-        printf("\n\n.");
-        exit(1);
+    	puts("\n\n\n                                    Universal mass storage tester");
+    	puts("\nUsage: massstoragetester -d <path> [-b] [-l <path>] [-e] [-s  <total size[kKmMgGtT]>] [-o|r|w|c <iterations>]");
+    	puts("		             [-i <salt>][-t] [-f <file size[kKmMgGtT]> [-m <count>] [-q|-a] [-p]]\n");
+    	puts(" -d --destination <path>  -- Path to test device or files root.");
+    	puts(" -s --total-size  <size>  -- Total bytes count to be written, rounded down to the size of a buffer.");
+    	puts("                             If not set, massstoragetester would fill entire device or all free space in target location.");
+    	puts("                             Please note that files may have filesystem-specific storage overhead and automatic free space estimation");
+    	puts("                             while setting file size too small may cause overflow. It shoudn't be considered as a bug.");
+    	puts("");
+    	puts(" -o --single              -- Single read/write cycle, for speed and volume measurement, default.");
+    	puts(" -c --cycle <iterations>  -- <iterations> read/write cycles, for endurance tests.");
+    	puts(" -w --write               -- Single write only.");
+    	puts(" -r --read                -- Single read only.");
+    	puts("                             -w, -r are useful for long term data retention tests.");
+    	puts("                             -w and -r must be launched with the same salt.");
+    	puts("");
+    	puts(" -f --file <size>         -- Write to a bunch of files instead of device with defined size.");
+    	puts("                             Single file should be less than 2 GiB and not larger than total data size.");
+    	puts(" -m --per-folder <count>  -- Set number of files per folder. If total files count exceeds <count>, they would be placed to a recursively created subdirectories");
+    	puts(" -p --preserve-files      -- Do not clean up files while reading back in file test mode.");
+    	puts("                             Useful for long-term storage reliability testing.");
+    	puts(" -q --overhead            -- Print filesystem storage overhead for the first run.");
+    	puts(" -a --overhead-continuous -- Print filesystem storage overhead for each read-write cycle.");
+    	puts("");
+    	puts(" -t --fec                 -- Estimates Reed-Solomon forward error correction code requirement for raw device for GF=256,");
+        puts("                             spare blocks count vs block size.");
+        puts("                             Total file size can be rounded down to a more optimal values.");
+        puts("");
+        puts(" -i --salt                -- Non-zero integer salt for random data being written, default 1.");
+        puts(" -b --background          -- Skip all confirmations and start a new test as a daemon.");
+        puts(" -l --logfile-path <path> -- Path to save and log file.");
+        puts(" -e --error-cap           -- Max number of system detected i/o errors before stopping test, default 1000.");
+        puts(" -h --help                -- Prints this message.");
+        puts("");
+        exit(EXIT_SUCCESS);
     }
 }
 
-void parse_cmd_val(int argc, char ** argv, char * path, uint32_t * seed , uint32_t * iterations, int *isfectesting,
-                   int *iswritingtofiles, int *notdeletefiles, int * headless, uint64_t * totsize, uint32_t * filesize)
+void missing_argument(char * str)
+{
+	printf("\nMissing argument for %s option, exiting now\n", str);
+	exit(EXIT_FAILURE);
+}
+
+void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
 {
     uint32_t filesiz;
 
     for(int i = 0; i < argc; i++)
     {
-        if(strcmp(argv[i], "-d") == 0)
+        if((strcmp(argv[i], "-d") == 0) || (strcmp(argv[i], "--destination") == 0))
         {
-            if(i + 1 == argc) exit(1);
+            if(i + 1 == argc) missing_argument(argv[i]);
             else
-                strcpy(path, argv[i + 1]);
+                strcpy(arguments->path, argv[i + 1]);
         }
 
-        if(strcmp(argv[i], "-i") == 0)
+        if((strcmp(argv[i], "-l") == 0) || (strcmp(argv[i], "--logfile-path") == 0))
         {
-            if((i + 1 == argc)) exit(1);
+            if(i + 1 == argc) missing_argument(argv[i]);
             else
-                sscanf(argv[i + 1], "%i", seed);
+                strcpy(arguments->logpath, argv[i + 1]);
         }
 
-        if(strcmp(argv[i], "-c") == 0)
+        if((strcmp(argv[i], "-i") == 0) || (strcmp(argv[i], "--salt") == 0))
         {
-            if((i + 1 == argc)) exit(1);
+            if((i + 1 == argc)) missing_argument(argv[i]);
             else
-                sscanf(argv[i + 1], "%i", iterations);
+                sscanf(argv[i + 1], "%i", &(arguments->seed));
         }
 
-        if(strcmp(argv[i], "-f") == 0)
+        if((strcmp(argv[i], "-c") == 0) || (strcmp(argv[i], "---cycle") == 0))
         {
-            if((i + 1 == argc)) exit(1);
+            if((i + 1 == argc)) missing_argument(argv[i]);
+            else
+                sscanf(argv[i + 1], "%i", &(arguments->iterations));
+        }
+
+        if((strcmp(argv[i], "-f") == 0) || (strcmp(argv[i], "--file") == 0))
+        {
+            if((i + 1 == argc)) missing_argument(argv[i]);
             else
             {
-                *iswritingtofiles = 1;
+            	arguments->iswritingtofiles = 1;
                 filesiz = tobytes(argv[i + 1]);
                 if(filesiz >= 0x7FFFFFFFLL) filesiz = 0x7FFFFFFF;
                 if(filesiz < 16) filesiz = 16;
                 filesiz -= (filesiz % 16);
-                *filesize = (uint32_t) filesiz;
+                arguments->bufsize = (uint32_t) filesiz;
             }
         }
 
-        if(strcmp(argv[i], "-s") == 0)
+        if((strcmp(argv[i], "-s") == 0) || (strcmp(argv[i], "--total-size") == 0))
         {
-            if((i + 1 == argc)) exit(1);
+            if((i + 1 == argc)) missing_argument(argv[i]);
             else
             {
-                *totsize = tobytes(argv[i + 1]);
+            	arguments->totsize = tobytes(argv[i + 1]);
             }
         }
 
-        if(strcmp(argv[i], "--fec") == 0) *isfectesting = 1;
+        if((strcmp(argv[i], "-e") == 0) || (strcmp(argv[i], "--error-cap") == 0))
+        {
+            if((i + 1 == argc)) missing_argument(argv[i]);
+            else
+            {
+            	arguments->errcntmax = argv[i + 1];
+            }
+        }
 
-        if(strcmp(argv[i], "-p") == 0) *notdeletefiles = 1;
-        if(strcmp(argv[i], "-h") == 0) *headless = 1;
+        if((strcmp(argv[i], "-t") == 0) || (strcmp(argv[i], "--fec") == 0)) arguments->isfectesting = 1;
+
+        if((strcmp(argv[i], "-p") == 0) || (strcmp(argv[i], "--preserve-files") == 0))      arguments->notdeletefiles = 1;
+        if((strcmp(argv[i], "-b") == 0) || (strcmp(argv[i], "--background") == 0))          arguments->background = 1;
+        if((strcmp(argv[i], "-q") == 0) || (strcmp(argv[i], "--overhead") == 0))            arguments->measure_fs_overhead = ONESHOT;
+        if((strcmp(argv[i], "-a") == 0) || (strcmp(argv[i], "--overhead-continuous") == 0)) arguments->measure_fs_overhead = REPEATED;
+
+        if((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "--help") == 0)) print_usage(0);
     }
 
-	if(strcmp(path, "-") == 0)
+	if(strcmp(arguments->path, "-") == 0)
 	{
         printf("\n No directory or device specified, exiting now\n");
         fflush(stdout);
-        exit(1);
+        exit(EXIT_FAILURE);
 	}
 
-	if(((path[0] != '/') && (*isfectesting == 1)))
+	if(((arguments->path[0] != '/') && (arguments->isfectesting == 1)))
 	{
-        printf("\nBackground runs require absolute path to the file/device.\n");
+        printf("\nBackground run requires absolute path to the file/device.\n");
         fflush(stdout);
-        exit(1);
+        exit(EXIT_FAILURE);
 	}
 
-    if((getuid()) && (!(*iswritingtofiles)))
+    if((getuid()) && (!(arguments->iswritingtofiles)))
     {
-        printf("\n Writing to a raw device requires root privileges\n");
+        printf("\nWriting to a raw device requires root privileges\n");
         fflush(stdout);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -134,22 +168,22 @@ enum prmode parse_cmd_mode(int argc, char ** argv)
     enum prmode ret = singlecycle;
     for(int i = 0; i < argc; i++)
     {
-        if(strcmp(argv[i],"-o") == 0)
+        if((strcmp(argv[i],"-o") == 0) || (strcmp(argv[i],"--single") == 0))
         {
             ret = singlecycle;
             break;
         }
-        if(strcmp(argv[i],"-c") == 0)
+        if((strcmp(argv[i],"-c") == 0) || (strcmp(argv[i],"--cycle") == 0))
         {
             ret = multicycle;
             break;
         }
-        if(strcmp(argv[i],"-w") == 0)
+        if((strcmp(argv[i],"-w") == 0) || (strcmp(argv[i],"--write") == 0))
         {
             ret = singlewrite;
             break;
         }
-        if(strcmp(argv[i],"-r") == 0)
+        if((strcmp(argv[i],"-r") == 0) || (strcmp(argv[i],"--read") == 0))
         {
             ret = singleread;
             break;
@@ -160,32 +194,36 @@ enum prmode parse_cmd_mode(int argc, char ** argv)
 
 void print_erasure_warning(char * path, uint64_t size)
 {
-    char str[PATH_MAX];
-    char sizestr[32];
+    char str[PATH_LENGTH];
+    char sizestr[DIGITS_MAX];
     int res;
+
     printf("\nWARNING! All data on the device would be lost!\n");
+
     strcpy(str, "Target device ");
     strcat(str, path);
     strcat(str, " with total size ");
     bytestostr(size, sizestr);
     strcat(str, sizestr);
     printf("%s",str);
+
     printf("\nIs the device correct? y/n\n");
     res = getchar();
     fflush(stdin);
-    if(res != 'y') exit(0);
-    else printf("\nSearching for a previous run...\n");
+    if(res != 'y') exit(EXIT_SUCCESS);
+
+    else           printf("\nSearching for a previous run...\n");
     fflush(stdout);
 }
 
-void log_init(int argc, char ** argv)
+void log_init(int argc, char ** argv, char * logpath)
 {
-    static char argstr[PATH_MAX];
-    static char logname[96];
+    static char argstr[PATH_LENGTH];
+    static char logname[PATH_LENGTH];
     struct tm * timeinfo;
     time_t startrun = time(NULL);
     time_t rawtime;
-    sprintf(logname, "test-%llu.log", (unsigned long long int) startrun);
+    sprintf(logname, "%s/test-%llu.log", logpath, (unsigned long long int) startrun);
 
     print(LOGFILE_INIT, logname);
 
@@ -204,25 +242,25 @@ void log_init(int argc, char ** argv)
     print(LOG, argstr);
 }
 
-void check_input_values(uint32_t seed, uint32_t iterations, uint64_t totsize, uint32_t bufsize, int iswritingtofiles)
+void check_input_values(struct options_s * arguments)
 {
-    if(iswritingtofiles)
+    if(arguments->iswritingtofiles)
     {
-        if(bufsize > (uint32_t) totsize)
+        if(arguments->bufsize > (uint32_t) arguments->totsize)
         {
             printf("\nSingle file size is bigger than the total data size\n");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
     }
-    if(totsize < 4)
+    if(arguments->totsize < 4)
     {
         printf("\nTotal size should not be zero\n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
-    if(seed == 0)
+    if(arguments->seed == 0)
     {
-        printf("\nseed value can't be zero\n");
-        exit(1);
+        printf("\nseed value cannot be be zero\n");
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -234,7 +272,7 @@ long long unsigned read_device_size(char * path)
     FILE * fp;
     long long unsigned size = 0;
     // Find last / in path string
-    for(; i < PATH_MAX; i++)
+    for(; i < PATH_LENGTH; i++)
     {
         if(path[i] == '\0') break;
         if(path[i] == '/') slashpos = i;
@@ -253,7 +291,7 @@ long long unsigned read_device_size(char * path)
         if(fscanf(fp, "%llu", &size) != 1)
         {
             printf("\nCannot read device size information from a system\n");
-            exit(1);
+            exit(EXIT_FAILURE);
         }
         fclose(fp);
         return (size * SYSFS_SIZE_BLOCKSIZE) ;
@@ -261,7 +299,7 @@ long long unsigned read_device_size(char * path)
     else
     {
         printf("\nCannot open %s\n", syspath);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
     return 0;
 }
@@ -273,53 +311,13 @@ uint64_t free_space_in_dir(char * path)
     uint64_t freeblocks;
 
     struct statvfs buf;
-    char * errmesg;
 
     int ret = statvfs(path, &buf);
     if(ret == -1)
     {
-        switch (errno)
-        {
-            case EACCES:
-                errmesg = "\nSearch permission is denied for a component of the path prefix of path\n";
-                break;
-            case EFAULT:
-                errmesg = "\nPath points to an invalid address.\n";
-                break;
-            case EINTR:
-                errmesg = "\nThis call was interrupted by a signal.\n";
-                break;
-            case EIO:
-                errmesg = "\nAn I/O error occurred while reading from the file system.\n";
-                break;
-            case ELOOP:
-                errmesg = "\nToo many symbolic links were encountered in translating path.\n";
-                break;
-            case ENAMETOOLONG:
-                errmesg = "\nPath is too long.\n";
-                break;
-            case ENOENT:
-                errmesg = "\nThe file referred to by path does not exist.\n";
-                break;
-            case ENOMEM:
-                errmesg = "\nInsufficient kernel memory was available.\n";
-                break;
-            case ENOSYS:
-                errmesg = "\nThe file system does not support this call.\n";
-                break;
-            case ENOTDIR:
-                errmesg = "\nA component of the path prefix of path is not a directory.\n";
-                break;
-            case EOVERFLOW:
-                errmesg = "\nSome values were too large to be represented in the returned struct.\n";
-                break;
-            default:
-                errmesg = "\nUnknown error.\n";
-        }
-
-        printf("\nUnable to determine remaining free space:");
-        printf("%s", errmesg);
-        exit(1);
+        perror("\nUnable to determine remaining free space");
+        printf("\nNo space information provided, exiting now.");
+        exit(EXIT_FAILURE);
     }
 
     blocksize = buf.f_bsize;
@@ -331,41 +329,49 @@ uint64_t free_space_in_dir(char * path)
 
 void print_folder_size(uint64_t totsize, uint32_t bufsize)
 {
-    static char sizestr[32];
+    static char sizestr[DIGITS_MAX];
     totsize -= totsize % bufsize;
     bytestostr(totsize, sizestr);
     printf("\nTesting %s free space\n", sizestr);
 }
 
+// TODO: replace custom prints to perror
 void make_daemon(void)
 {
-	pid_t pid;
+    pid_t pid;
 	// create new process
-	pid = fork ( );
-	if(pid == -1)
-	{
-		printf("\nFauled to create a daemon process\n");
-		exit(1);
-	}
-	else if(pid != 0)
-	{
-			printf("\nGoint to the background\n");
-			exit(EXIT_SUCCESS);
-	}
+    pid = fork();
+    if(pid == -1)
+    {
+        perror("\nFailed to create a daemon process");
+        exit(EXIT_FAILURE);
+    }
+    else if(pid != 0)
+    {
+        printf("\nGoing to the background\n");
+        exit(EXIT_SUCCESS);
+    }
 
-	// create new session and process group
-	if (setsid() == -1) exit(1);
+    // create new session and process group
+    if(setsid() == -1)
+    {
+    	perror("Failed to create new sid");
+    	exit(EXIT_FAILURE);
+    }
 
-	// set the working directory to the root directory
-	if (chdir ("/") == -1) exit(1);
+    // set the working directory to the root directory
+    if(chdir("/") == -1)
+    {
+    	perror("Failed to set working directory to /");
+    	exit(EXIT_FAILURE);
+    }
 
-	// close stdin, stdout and stderr
-	close(STDIN_FILENO);
-	close(STDOUT_FILENO);
-	close(STDERR_FILENO);
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
 
-	// redirect fd's 0,1,2 to /dev/null
-	open ("/dev/null", O_RDWR);
-	open ("/dev/null", O_RDWR);
-	open ("/dev/null", O_RDWR);
+    // redirect fd's 0,1,2 to /dev/null
+    open("/dev/null", O_RDWR);
+    open("/dev/null", O_RDWR);
+    open("/dev/null", O_RDWR);
 }

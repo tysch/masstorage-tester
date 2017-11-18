@@ -8,22 +8,20 @@
 #include "constants.h"
 #include "tests.h"
 
-// Ctrl+C interrupt handler
 
+// Ctrl+C interrupt handler
 int stop_cycling = 0;
 int stop_all = 0;
 
-int headless = 0;
-
-struct sigaction old_action;
-
+static int CtrlCs = 5; // Prevent premature shutdown upon repeated Ctrl+C
 void sigint_handler(int s)
 {
     if(stop_cycling && stop_all)
     {
         printf("\n\nShutting down..\n\n");
+        CtrlCs--;
         fflush(stdout);
-        exit(1);
+        if(CtrlCs < 1) exit(EXIT_FAILURE);
     }
 
     if(stop_cycling && (!stop_all))
@@ -41,31 +39,58 @@ void sigint_handler(int s)
     }
 }
 
+void sigterm_handler(int s)
+{
+	stop_all = 1;
+	stop_cycling = 1;
+}
+
+
 int main(int argc, char ** argv)
 {
-    enum prmode mod;
     struct sigaction siginthandler;
+    struct sigaction sigtermhandler;
 
-    char path[PATH_MAX] = "-";      // Path to device or directory with files being tested
-
-    uint32_t seed = 1;
-    uint32_t iterations = 1;
-
-    int isfectesting = 0;
-    int iswritingtofiles = 0;
-    int notdeletefiles = 0;
-
-    uint64_t totsize = 0;
-    uint32_t bufsize = DISK_BUFFER;
+    enum prmode mod;
+    struct options_s arguments =
+    {
+        .path = "-",                                    // Path to device or directory with files being tested
+        .logpath = " ",                                 // Path to a directory with working files
+        .seed = 1,                                      // Seed for RNG
+    	.iterations = 1,                                // Number of read-write cycles
+    	.files_per_folder =  FILES_PER_FOLDER_DEFAULT,
+    	.isfectesting = 0,
+    	.iswritingtofiles = 0,
+    	.islogging = 0,
+    	.notdeletefiles = 0,
+    	.measure_fs_overhead = ONESHOT,
+     	.errcntmax = "1000",
+     	.totsize = 0,
+     	.bufsize = DISK_BUFFER
+    };
 
     char * buf;
 
     print_usage(argc);
 
-    parse_cmd_val(argc, argv, path, &seed, &iterations, &isfectesting, &iswritingtofiles, &notdeletefiles, &headless, &totsize, &bufsize);
+    parse_cmd_val(argc, argv, &arguments);
+
+    // Set SIGTERM handler for gentle shutdown along with OS.
+	sigtermhandler.sa_handler = sigterm_handler;
+	sigemptyset(&sigtermhandler.sa_mask);
+	sigtermhandler.sa_flags = 0;
+	sigaction(SIGTERM, &sigtermhandler, NULL);
 
     // Daemonize application
-    if(headless) make_daemon();
+    if(arguments.background)
+    {
+    	if(!(arguments.islogging))
+    	{
+    		puts("\nLog file is required for running into background, exiting now.");
+    		exit(EXIT_FAILURE);
+    	}
+    	make_daemon();
+    }
     else // Enable Ctrl+C interrupts
     {
     	siginthandler.sa_handler = sigint_handler;
@@ -76,50 +101,50 @@ int main(int argc, char ** argv)
 
     mod = parse_cmd_mode(argc, argv);
 
-    if(totsize == 0) // Size of device/file in not explicitly specified
+    if(arguments.totsize == 0) // Size of device/file in not explicitly specified
     {
-        if(iswritingtofiles) totsize = free_space_in_dir(path);
-        else                 totsize = read_device_size(path);
+        if(arguments.iswritingtofiles) arguments.totsize = free_space_in_dir(arguments.path);
+        else                           arguments.totsize = read_device_size( arguments.path);
     }
 
-    check_input_values(seed, iterations, totsize, bufsize, iswritingtofiles);
+    check_input_values(&arguments);
 
-    if(!headless)
+    if(!arguments.background)
     {
-        if(iswritingtofiles) print_folder_size(totsize, bufsize);
-        else                 print_erasure_warning(path, totsize);
+        if(arguments.iswritingtofiles) print_folder_size(arguments.totsize, arguments.bufsize);
+        else                           print_erasure_warning(arguments.path, arguments.totsize);
     }
 
-    log_init(argc, argv);
+    if(arguments.islogging) log_init(argc, argv, arguments.logpath);
 
-    buf = malloc(sizeof * buf * bufsize);
+    buf = malloc(sizeof * buf * (arguments.bufsize));
     if(buf == NULL)
     {
-        printf("\nnot enough RAM");
-        exit(1);
+        printf("\nNot enough RAM");
+        exit(EXIT_FAILURE);
     }
 
     switch(mod)
     {
         case singleread:
-            singleread_f(path, buf, bufsize, totsize, seed, isfectesting, iswritingtofiles, notdeletefiles);
+            singleread_f(buf, &arguments);
             break;
 
         case singlewrite:
-            singlewrite_f(path, buf, bufsize, totsize, seed, iswritingtofiles, notdeletefiles);
+            singlewrite_f(buf, &arguments);
             break;
 
         case singlecycle:
-        	cycle_f(path, buf, seed, 1, isfectesting, iswritingtofiles, notdeletefiles, totsize, bufsize);
-            break;
+        	arguments.iterations = 1;
+        	cycle_f(buf, &arguments);
+        	break;
 
         case multicycle:
-        	cycle_f(path, buf, seed, iterations, isfectesting, iswritingtofiles, notdeletefiles, totsize, bufsize);
+        	cycle_f(buf, &arguments);
             break;
     }
 
     printf("\n");
-
     print(LOGFILE_EXIT, " ");
     free(buf);
     return 0;
