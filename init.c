@@ -21,31 +21,31 @@ void print_usage(int arg)
 {
     if(arg < 3)
     {
-    	puts("\n\n\n                                    Universal mass storage tester");
-    	puts("\nUsage: massstoragetester -d <path> [-b] [-l <path>] [-e] [-s  <total size[kKmMgGtT]>] [-o|r|w|c <iterations>]");
-    	puts("		             [-i <salt>][-t] [-f <file size[kKmMgGtT]> [-m <count>] [-q|-a] [-p]]\n");
-    	puts(" -d --destination <path>  -- Path to test device or files root.");
-    	puts(" -s --total-size  <size>  -- Total bytes count to be written, rounded down to the size of a buffer.");
-    	puts("                             If not set, massstoragetester would fill entire device or all free space in target location.");
-    	puts("                             Please note that files may have filesystem-specific storage overhead and automatic free space estimation");
-    	puts("                             while setting file size too small may cause overflow. It shoudn't be considered as a bug.");
-    	puts("");
-    	puts(" -o --single              -- Single read/write cycle, for speed and volume measurement, default.");
-    	puts(" -c --cycle <iterations>  -- <iterations> read/write cycles, for endurance tests.");
-    	puts(" -w --write               -- Single write only.");
-    	puts(" -r --read                -- Single read only.");
-    	puts("                             -w, -r are useful for long term data retention tests.");
-    	puts("                             -w and -r must be launched with the same salt.");
-    	puts("");
-    	puts(" -f --file <size>         -- Write to a bunch of files instead of device with defined size.");
-    	puts("                             Single file should be less than 2 GiB and not larger than total data size.");
-    	puts(" -m --per-folder <count>  -- Set number of files per folder. If total files count exceeds <count>, they would be placed to a recursively created subdirectories");
-    	puts(" -p --preserve-files      -- Do not clean up files while reading back in file test mode.");
-    	puts("                             Useful for long-term storage reliability testing.");
-    	puts(" -q --overhead            -- Print filesystem storage overhead for the first run.");
-    	puts(" -a --overhead-continuous -- Print filesystem storage overhead for each read-write cycle.");
-    	puts("");
-    	puts(" -t --fec                 -- Estimates Reed-Solomon forward error correction code requirement for raw device for GF=256,");
+        puts("\n\n\n                                    Universal mass storage tester");
+        puts("\nUsage: massstoragetester -d <path> [-b] [-l <path>] [-e] [-s  <total size[kKmMgGtT]>] [-o|r|w|c <iterations>]");
+        puts("                          [-i <salt>][-t] [-f <file size[kKmMgGtT]> [-m <count>] [-q|-a] [-p]]\n");
+        puts(" -d --destination <path>  -- Path to test device or files root.");
+        puts(" -s --total-size  <size>  -- Total bytes count to be written, rounded down to the size of a buffer.");
+        puts("                             If not set, massstoragetester would fill entire device or all free space in target location.");
+        puts("                             Please note that files may have filesystem-specific storage overhead and automatic free space estimation");
+        puts("                             while setting file size too small may cause overflow. It shoudn't be considered as a bug.");
+        puts("");
+        puts(" -o --single              -- Single read/write cycle, for speed and volume measurement, default.");
+        puts(" -c --cycle <iterations>  -- <iterations> read/write cycles, for endurance tests.");
+        puts(" -w --write               -- Single write only.");
+        puts(" -r --read                -- Single read only.");
+        puts("                             -w, -r are useful for long term data retention tests.");
+        puts("                             -w and -r must be launched with the same salt.");
+        puts("");
+        puts(" -f --file <size>         -- Write to a bunch of files instead of device with defined size.");
+        puts("                             Single file should be less than 2 GiB and not larger than total data size.");
+        puts(" -m --per-folder <count>  -- Set number of files per folder. If total files count exceeds <count>, they would be placed to a recursively created subdirectories");
+        puts(" -p --preserve-files      -- Do not clean up files while reading back in file test mode.");
+        puts("                             Useful for long-term storage reliability testing.");
+        puts(" -q --overhead            -- Print filesystem storage overhead for the first run.");
+        puts(" -a --overhead-continuous -- Print filesystem storage overhead for each read-write cycle.");
+        puts("");
+        puts(" -t --fec                 -- Estimates Reed-Solomon forward error correction code requirement for raw device for GF=256,");
         puts("                             spare blocks count vs block size.");
         puts("                             Total file size can be rounded down to a more optimal values.");
         puts("");
@@ -61,8 +61,8 @@ void print_usage(int arg)
 
 void missing_argument(char * str)
 {
-	printf("\nMissing argument for %s option, exiting now\n", str);
-	exit(EXIT_FAILURE);
+    printf("\nMissing argument for %s option, exiting now\n", str);
+    exit(EXIT_FAILURE);
 }
 
 void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
@@ -89,14 +89,14 @@ void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
         {
             if((i + 1 == argc)) missing_argument(argv[i]);
             else
-                sscanf(argv[i + 1], "%i", &(arguments->seed));
+                arguments->seed = atoi(argv[i + 1]);
         }
 
         if((strcmp(argv[i], "-c") == 0) || (strcmp(argv[i], "---cycle") == 0))
         {
             if((i + 1 == argc)) missing_argument(argv[i]);
             else
-                sscanf(argv[i + 1], "%i", &(arguments->iterations));
+                arguments->iterations = atoi(argv[i + 1]);
         }
 
         if((strcmp(argv[i], "-f") == 0) || (strcmp(argv[i], "--file") == 0))
@@ -104,9 +104,9 @@ void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
             if((i + 1 == argc)) missing_argument(argv[i]);
             else
             {
-            	arguments->iswritingtofiles = 1;
+                arguments->iswritingtofiles = 1;
                 filesiz = tobytes(argv[i + 1]);
-                if(filesiz >= 0x7FFFFFFFLL) filesiz = 0x7FFFFFFF;
+                if(filesiz >= 0x7FFFFFFFLL) filesiz = 0x7FFFFFFFLL;
                 if(filesiz < 16) filesiz = 16;
                 filesiz -= (filesiz % 16);
                 arguments->bufsize = (uint32_t) filesiz;
@@ -118,7 +118,7 @@ void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
             if((i + 1 == argc)) missing_argument(argv[i]);
             else
             {
-            	arguments->totsize = tobytes(argv[i + 1]);
+                arguments->totsize = tobytes(argv[i + 1]);
             }
         }
 
@@ -127,7 +127,17 @@ void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
             if((i + 1 == argc)) missing_argument(argv[i]);
             else
             {
-            	arguments->errcntmax = argv[i + 1];
+                arguments->errcntmax = argv[i + 1];
+            }
+        }
+
+        if((strcmp(argv[i], "-m") == 0) || (strcmp(argv[i], "--per-folder") == 0))
+        {
+            if((i + 1 == argc)) missing_argument(argv[i]);
+            else
+            {
+                arguments->files_per_folder = (uint32_t) tobytes(argv[i + 1]);
+                if(arguments->files_per_folder > FILES_PER_FOLDER_MAX) arguments->files_per_folder = FILES_PER_FOLDER_MAX;
             }
         }
 
@@ -141,19 +151,19 @@ void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
         if((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "--help") == 0)) print_usage(0);
     }
 
-	if(strcmp(arguments->path, "-") == 0)
-	{
+    if(strcmp(arguments->path, "-") == 0)
+    {
         printf("\n No directory or device specified, exiting now\n");
         fflush(stdout);
         exit(EXIT_FAILURE);
-	}
+    }
 
-	if(((arguments->path[0] != '/') && (arguments->isfectesting == 1)))
-	{
+    if(((arguments->path[0] != '/') && (arguments->isfectesting == 1)))
+    {
         printf("\nBackground run requires absolute path to the file/device.\n");
         fflush(stdout);
         exit(EXIT_FAILURE);
-	}
+    }
 
     if((getuid()) && (!(arguments->iswritingtofiles)))
     {
@@ -165,31 +175,26 @@ void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
 
 enum prmode parse_cmd_mode(int argc, char ** argv)
 {
-    enum prmode ret = singlecycle;
     for(int i = 0; i < argc; i++)
     {
         if((strcmp(argv[i],"-o") == 0) || (strcmp(argv[i],"--single") == 0))
         {
-            ret = singlecycle;
-            break;
+            return singlecycle;
         }
         if((strcmp(argv[i],"-c") == 0) || (strcmp(argv[i],"--cycle") == 0))
         {
-            ret = multicycle;
-            break;
+            return multicycle;
         }
         if((strcmp(argv[i],"-w") == 0) || (strcmp(argv[i],"--write") == 0))
         {
-            ret = singlewrite;
-            break;
+            return singlewrite;
         }
         if((strcmp(argv[i],"-r") == 0) || (strcmp(argv[i],"--read") == 0))
         {
-            ret = singleread;
-            break;
+            return singleread;
         }
     }
-    return ret;
+    return singlecycle;
 }
 
 void print_erasure_warning(char * path, uint64_t size)
@@ -339,7 +344,7 @@ void print_folder_size(uint64_t totsize, uint32_t bufsize)
 void make_daemon(void)
 {
     pid_t pid;
-	// create new process
+    // create new process
     pid = fork();
     if(pid == -1)
     {
@@ -355,15 +360,15 @@ void make_daemon(void)
     // create new session and process group
     if(setsid() == -1)
     {
-    	perror("Failed to create new sid");
-    	exit(EXIT_FAILURE);
+        perror("Failed to create new sid");
+        exit(EXIT_FAILURE);
     }
 
     // set the working directory to the root directory
     if(chdir("/") == -1)
     {
-    	perror("Failed to set working directory to /");
-    	exit(EXIT_FAILURE);
+        perror("Failed to set working directory to /");
+        exit(EXIT_FAILURE);
     }
 
     close(STDIN_FILENO);

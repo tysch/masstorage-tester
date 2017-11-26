@@ -18,7 +18,7 @@ extern int stop_all;
 
 void fillfiles(char * buf, struct options_s * options)
 {
-	char filename[PATH_LENGTH];
+    char filename[PATH_LENGTH];
     char fileindir[PATH_LENGTH];
     char errmesg[128];
 
@@ -47,8 +47,8 @@ void fillfiles(char * buf, struct options_s * options)
 
         fillbuf(buf, options->bufsize);
 
-        path_append(options->path, fileindir, i, nfiles, options->files_per_folder);                   // Append path for additional folders
-        sprintf(filename, "%s/%lli.jnk", fileindir, (long long) i);// Generate file name
+        path_append(options->path, fileindir, i, nfiles, options->files_per_folder); // Append path for additional folders
+        sprintf(filename, "%s.jnk", fileindir);// Generate file name
 
         ioerrors = nofail_writefile(filename, buf, options->bufsize);
 
@@ -57,7 +57,7 @@ void fillfiles(char * buf, struct options_s * options)
 
         if(ioerrors)
         {
-            sprintf(errmesg, "\n%lli.jnk write error\n", (long long) i);
+            sprintf(errmesg, "\n%s write error\n", filename);
             print(ERROR, errmesg);
         }
 
@@ -73,10 +73,10 @@ void fillfiles(char * buf, struct options_s * options)
 
     if((byteswritten != 0) && options->measure_fs_overhead)
     {
-    	// Skip overhead computation for the next runs
-    	if(options->measure_fs_overhead == ONESHOT) options->measure_fs_overhead = 0;
+        // Skip overhead computation for the next runs
+        if(options->measure_fs_overhead == ONESHOT) options->measure_fs_overhead = 0;
 
-    	stopspace = free_space_in_dir(options->path);
+        stopspace = free_space_in_dir(options->path);
         overhead = ((double)(stopspace - startspace - byteswritten) / (double)byteswritten);
         sprintf(errmesg, "\nFilesystem overhead is %.3f %%", 100*overhead);
         print(OUT, errmesg);
@@ -128,7 +128,7 @@ void readfiles(char * buf, struct options_s * options)
         if(stop_all) break;
 
         path_append(options->path, fileindir, i, nfiles, options->files_per_folder);              // Append path for additional folders
-        sprintf(filename, "%s/%lli.jnk", options->path, (long long) i);// Generate file name
+        sprintf(filename, "%s.jnk", fileindir);// Generate file name
 
         ioerrors = nofail_readfile(filename, buf, options->bufsize, options->notdeletefiles);
         totioerrors += ioerrors;
@@ -138,7 +138,7 @@ void readfiles(char * buf, struct options_s * options)
         if(ioerrors)
         {
             bytestostr(ioerrors, errsize);
-            sprintf(errmesg, "\n--------------------file %-15lli.jnk is damaged, %-9s errors\n", (long long) i, errsize);
+            sprintf(errmesg, "\n--------------------file %s is damaged, %-9s errors\n", filename, errsize);
             print(OUT, errmesg);
         }
 

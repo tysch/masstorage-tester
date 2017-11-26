@@ -151,4 +151,3 @@ void readdevice(char * buf, struct options_s * option)
         free(fecblocks);
     }
 }
-

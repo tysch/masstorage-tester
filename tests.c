@@ -14,47 +14,47 @@ extern int stop_all;
 void singlewrite_f(char * buf, struct options_s * options)
 {
     printprogress(reset, 0);
-	printprogress(writep, 0);
+    printprogress(writep, 0);
 
     if(options->iswritingtofiles)
-    	fillfiles(buf, options);
+        fillfiles(buf, options);
     else
-    	filldevice(buf, options);
+        filldevice(buf, options);
 
     if(stop_all) return;
-	if(options->islogging) save(options);
+        if(options->islogging) save(options);
 }
 
 void singleread_f(char * buf, struct options_s * options)
 {
     printprogress(reset, 0);
-	printprogress(readp, 0);
+    printprogress(readp, 0);
 
-	if(options->islogging) load(options);
-	if(stop_all) return;
+    if(options->islogging) load(options);
+    if(stop_all) return;
 
     if(options->iswritingtofiles)
-    	readfiles(buf, options);
+        readfiles(buf, options);
     else
-    	readdevice(buf, options);
+        readdevice(buf, options);
 }
 
 void cycle_f(char * buf, struct options_s * options)
 {
-	printprogress(reset, 0);
+    printprogress(reset, 0);
     if(options->islogging) load(options);
 
     if(stop_all) return;
-	do
+    do
     {
-		if(stop_all) break;
-		options->iterations--;
+        if(stop_all) break;
+        options->iterations--;
         printprogress(writep, 0);
 
         if(options->iswritingtofiles)
-        	fillfiles(buf, options);
+            fillfiles(buf, options);
         else
-        	filldevice(buf, options);
+            filldevice(buf, options);
 
         if(stop_all) break;
 
@@ -64,9 +64,9 @@ void cycle_f(char * buf, struct options_s * options)
         printprogress(readp, 0);
 
         if(options->iswritingtofiles)
-        	readfiles(buf, options);
+            readfiles(buf, options);
         else
-        	readdevice(buf, options);
+            readdevice(buf, options);
 
         if(stop_all) break;
 

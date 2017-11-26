@@ -1,4 +1,4 @@
-CFLAGS= -Wall -O1 -Wno-parentheses -std=c99 -D_POSIX_C_SOURCE
+CFLAGS= -Wall -O1 -Wno-parentheses -std=c99 -D_POSIX_C_SOURCE -D_LARGEFILE64_SOURCE=1 -pedantic
 CC = gcc
 
 massstoragetester : main.o main.o tests.o devtest.o filetest.o fec.o rng.o print.o\

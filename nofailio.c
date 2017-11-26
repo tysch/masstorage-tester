@@ -31,7 +31,7 @@ int nofail_open(char * path)
     if((fd == -1) && (errno == EROFS))
     {
         print(ERROR, "\nCannot open file/device for reading and writing, falling back to read-only\n");
-        fd = open(path, O_RDONLY);
+        fd = open64(path, O_RDONLY);
         if(fd == -1) printerr("\nFile/device open error:");
     }
 
@@ -79,7 +79,7 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
         offtbuf = buf + bufpos;     // Pointer to the beginning of the unread buffer section
         remsize = bufsize - bufpos; // Remaining bytes to read
 
-        res = pread(fd, offtbuf, remsize, curr_pos);
+        res = pread64(fd, offtbuf, remsize, curr_pos);
         if(res == remsize) return ioreaderrcnt; // Nothing left to read
 
         if(res > 0)    // Something have been read successfully
@@ -110,7 +110,7 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
                   )
                 {
                     if(errno == EIO) printerr("\nFile/device read error:"); // Warn about hardware error
-                    res = pread(fd, offtbuf, remsize, curr_pos);
+                    res = pread64(fd, offtbuf, remsize, curr_pos);
                 }
                 else break; // Error is too serious to retry
 
@@ -145,7 +145,7 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
             bufpos = padzero_end;
 
             skipbytes = skipbytes + skipbytes / SKIP_DIV;
-            if(skipbytes > (1 << 30)) skipbytes = 1 << 30; // To prevent overflow
+            if(skipbytes > (1 << 30)) skipbytes = 1 << 30; // To prevent overflow TODO: move to constants.h
         }
     }
     while (bufpos != bufsize); // Buffer is full
@@ -179,7 +179,7 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
         offtbuf = buf + bufpos;     // Pointer to the beginning of the unwritten buffer section
         remsize = bufsize - bufpos; // Remaining bytes to write
 
-        res = pwrite(fd, offtbuf, remsize, curr_pos);
+        res = pwrite64(fd, offtbuf, remsize, curr_pos);
         if(res == remsize) return (uint32_t) iowriteerrcnt; // Nothing left to be written
 
         if(res > 0)    // Something have been written successfully
@@ -213,7 +213,7 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
                   )
                 {
                     if(errno == EIO) printerr("\nFile/device write error:");  // Warn about hardware error
-                    res = pwrite(fd, offtbuf, remsize, curr_pos);
+                    res = pwrite64(fd, offtbuf, remsize, curr_pos);
                 }
                 else break; // Error is too serious to retry
                 if(res > 0) break; // Something have been written by retries;
@@ -243,7 +243,7 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
             iowriteerrcnt += bufpos;
 
             skipbytes = skipbytes + skipbytes / SKIP_DIV;
-            if(skipbytes > (1 << 30)) skipbytes = 1 << 30; // To prevent overflow
+            if(skipbytes > (1 << 30)) skipbytes = 1 << 30; // To prevent overflow TODO:move to constants.h
         }
     }
     while (bufpos != bufsize); // Nothing left to write

@@ -28,41 +28,41 @@ void bytestostr(uint64_t bytes, char * str)
 // Converts seconds interval to date
 void todate(uint64_t s, char * date)
 {
-	int sec = s % 60;
-	s /= 60;
-	int min = s % 60;
-	s /= 60;
-	int hours = s % 24;
-	s /= 24;
-	int days = s % 365;
-	s /= 365;
-	int years = s;
-	if(years)
-	{
-	    sprintf(date, "%i yr %i days %02i:%02i:%02i", years, days, hours, min, sec);
-	}
-	else
-	{
-	    if(days)
-	    {
-	        sprintf(date, "%i days %02i:%02i:%02i", days, hours, min, sec);
-	    }
-	    else
-	    {
-	    	if(hours)
-	        {
-	            sprintf(date, "%02i:%02i:%02i", hours, min, sec);
-	        }
-	        else
-	        {
-	            if(min)
-	            {
-	                sprintf(date, "%02i:%02i", min, sec);
-	            }
-	            else sprintf(date, "%is", sec);
-	        }
-	    }
-	}
+    int sec = s % 60;
+    s /= 60;
+    int min = s % 60;
+    s /= 60;
+    int hours = s % 24;
+    s /= 24;
+    int days = s % 365;
+    s /= 365;
+    int years = s;
+    if(years)
+    {
+        sprintf(date, "%i yr %i days %02i:%02i:%02i", years, days, hours, min, sec);
+    }
+    else
+    {
+        if(days)
+        {
+            sprintf(date, "%i days %02i:%02i:%02i", days, hours, min, sec);
+        }
+        else
+        {
+            if(hours)
+            {
+                sprintf(date, "%02i:%02i:%02i", hours, min, sec);
+            }
+            else
+            {
+                if(min)
+                {
+                    sprintf(date, "%02i:%02i", min, sec);
+                }
+                else sprintf(date, "%is", sec);
+            }
+        }
+    }
 }
 
 // Converts human-readable size string to bytes
@@ -75,7 +75,7 @@ uint64_t tobytes(char * x)
         if((x[i] >= '0') && (x[i] < '9'))
         {
             bytes *= 10;
-            bytes += (x[i] - 48);
+            bytes += (x[i] - '0');
         }
         if((x[i] > 'A') && (x[i] < 'z'))
         {

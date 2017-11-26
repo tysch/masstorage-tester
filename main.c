@@ -8,7 +8,6 @@
 #include "constants.h"
 #include "tests.h"
 
-
 // Ctrl+C interrupt handler
 int stop_cycling = 0;
 int stop_all = 0;
@@ -41,10 +40,9 @@ void sigint_handler(int s)
 
 void sigterm_handler(int s)
 {
-	stop_all = 1;
-	stop_cycling = 1;
+    stop_all = 1;
+    stop_cycling = 1;
 }
-
 
 int main(int argc, char ** argv)
 {
@@ -57,16 +55,16 @@ int main(int argc, char ** argv)
         .path = "-",                                    // Path to device or directory with files being tested
         .logpath = " ",                                 // Path to a directory with working files
         .seed = 1,                                      // Seed for RNG
-    	.iterations = 1,                                // Number of read-write cycles
-    	.files_per_folder =  FILES_PER_FOLDER_DEFAULT,
-    	.isfectesting = 0,
-    	.iswritingtofiles = 0,
-    	.islogging = 0,
-    	.notdeletefiles = 0,
-    	.measure_fs_overhead = ONESHOT,
-     	.errcntmax = "1000",
-     	.totsize = 0,
-     	.bufsize = DISK_BUFFER
+        .iterations = 1,                                // Number of read-write cycles
+        .files_per_folder =  FILES_PER_FOLDER_DEFAULT,
+        .isfectesting = 0,
+        .iswritingtofiles = 0,
+        .islogging = 0,
+        .notdeletefiles = 0,
+        .measure_fs_overhead = 0,
+        .errcntmax = "1000",
+        .totsize = 0LL,
+        .bufsize = DISK_BUFFER
     };
 
     char * buf;
@@ -76,32 +74,32 @@ int main(int argc, char ** argv)
     parse_cmd_val(argc, argv, &arguments);
 
     // Set SIGTERM handler for gentle shutdown along with OS.
-	sigtermhandler.sa_handler = sigterm_handler;
-	sigemptyset(&sigtermhandler.sa_mask);
-	sigtermhandler.sa_flags = 0;
-	sigaction(SIGTERM, &sigtermhandler, NULL);
+    sigtermhandler.sa_handler = sigterm_handler;
+    sigemptyset(&sigtermhandler.sa_mask);
+    sigtermhandler.sa_flags = 0;
+    sigaction(SIGTERM, &sigtermhandler, NULL);
 
     // Daemonize application
     if(arguments.background)
     {
-    	if(!(arguments.islogging))
-    	{
-    		puts("\nLog file is required for running into background, exiting now.");
-    		exit(EXIT_FAILURE);
-    	}
-    	make_daemon();
+        if(!(arguments.islogging))
+        {
+            puts("\nLog file is required for running into background, exiting now.");
+            exit(EXIT_FAILURE);
+        }
+        make_daemon();
     }
     else // Enable Ctrl+C interrupts
     {
-    	siginthandler.sa_handler = sigint_handler;
-    	sigemptyset(&siginthandler.sa_mask);
-    	siginthandler.sa_flags = 0;
-    	sigaction(SIGINT, &siginthandler, NULL);
+        siginthandler.sa_handler = sigint_handler;
+        sigemptyset(&siginthandler.sa_mask);
+        siginthandler.sa_flags = 0;
+        sigaction(SIGINT, &siginthandler, NULL);
     }
 
     mod = parse_cmd_mode(argc, argv);
 
-    if(arguments.totsize == 0) // Size of device/file in not explicitly specified
+    if(arguments.totsize == 0LL) // Size of device/file in not explicitly specified
     {
         if(arguments.iswritingtofiles) arguments.totsize = free_space_in_dir(arguments.path);
         else                           arguments.totsize = read_device_size( arguments.path);
@@ -135,12 +133,12 @@ int main(int argc, char ** argv)
             break;
 
         case singlecycle:
-        	arguments.iterations = 1;
-        	cycle_f(buf, &arguments);
-        	break;
+            arguments.iterations = 1;
+            cycle_f(buf, &arguments);
+            break;
 
         case multicycle:
-        	cycle_f(buf, &arguments);
+            cycle_f(buf, &arguments);
             break;
     }
 

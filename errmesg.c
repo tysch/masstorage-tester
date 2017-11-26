@@ -18,14 +18,13 @@ int errnochanged(void)
 
 void printerr(char * descript)
 {
-	static char descr_prev[1024] = "";
-	//
-	if(
-	    !(strcmp(descript, descr_prev) == 0) // Error happened in the same function
-	    || errnochanged())                   // Type of error changed
-	{
-    	strcpy(descr_prev, descript);
-		print(ERROR, descript);
-    	print(ERROR, strerror(errno));
-	}
+    static char descr_prev[1024] = "";
+    if(
+    !(strcmp(descript, descr_prev) == 0) // Error happened in the same function
+    || errnochanged())                   // Type of error changed
+    {
+        strcpy(descr_prev, descript);
+        print(ERROR, descript);
+        print(ERROR, strerror(errno));
+    }
 }

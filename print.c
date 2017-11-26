@@ -45,7 +45,7 @@ void print(enum print_mode action, const char * string)
             break;
 
         case ERRCNT_INIT :
-        	sscanf(string, "%lli", &errcntmax);
+            sscanf(string, "%lli", &errcntmax);
             break;
 
         case LOGFILE_EXIT :
@@ -64,7 +64,7 @@ void print(enum print_mode action, const char * string)
 
         case ERROR :
             errorcount++;
-        	printf("%s", string);
+            printf("%s", string);
             fflush(stdout);
             if(islogging) 
             {

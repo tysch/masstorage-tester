@@ -44,11 +44,10 @@ uint32_t nofail_writefile(char * path, char * buf, uint32_t bufsize)
 // Read and delete file; returns number of i/o errors
 uint32_t nofail_readfile(char * path, char * buf, uint32_t bufsize, int notdeletefile)
 {
-    int fd;
     uint32_t ret;
     char errstr[PATH_LENGTH];
 
-    fd = nofail_open(path);
+    int fd = nofail_open(path);
 
     if(fd == -1)
     {
@@ -67,67 +66,67 @@ uint32_t nofail_readfile(char * path, char * buf, uint32_t bufsize, int notdelet
 
 int nofail_stat(const char *path, struct stat *buf)
 {
-	int ret = stat(path, buf);
-	if(ret == -1) printerr("\nFile stat reading error:");
-	return ret;
+    int ret = stat(path, buf);
+    if(ret == -1) printerr("\nFile stat reading error:");
+    return ret;
 }
 
 int isdir(const char *path)
 {
-	struct stat buf;
-	nofail_stat(path, &buf);
+    struct stat buf;
+    nofail_stat(path, &buf);
 
-	if(buf.st_mode == S_IFDIR) return 1;
-	return 0;
+    if(buf.st_mode == S_IFDIR) return 1;
+    return 0;
 }
 
 // Wrapper for mkdir with error message logging
 int nofail_mkdir(char * path)
 {
-	int ret = mkdir(path, 0666);
-	if(ret == -1) printerr("\nDirectory creation error:");
-	return ret;
+    int ret = mkdir(path, 0666);
+    if(ret == -1) printerr("\nDirectory creation error:");
+    return ret;
 }
 
 // Wrapper for mkdir with error message logging
 int nofail_rmdir(char * path)
 {
-	int ret = rmdir(path);
-	if(ret == -1) printerr("\nDirectory removing error:");
-	return ret;
+    int ret = rmdir(path);
+    if(ret == -1) printerr("\nDirectory removing error:");
+    return ret;
 }
 
 // Recursively create directories up to depth level while counting total nfiles they can contain
 void rec_mkdir(char * path, uint64_t * nfiles, uint32_t files_per_folder, int depth)
 {
-	char current_foldername[DIGITS_MAX];
-	char current_path[PATH_LENGTH];
+    char current_foldername[DIGITS_MAX];
+    char current_path[PATH_LENGTH];
 
-	int mkd;
+    int mkd;
 
-	if((*nfiles) == 0) return; // No directories need to be added
+    if((*nfiles) == 0) return; // No directories need to be added
 
-	mkd = nofail_mkdir(path);  // Create a directory at current depth
-	if(mkd == -1) return;      // Failed to create directory, skip all subdirectories creation
+    mkd = nofail_mkdir(path);  // Create a directory at current depth
+    if(mkd == -1) return;      // Failed to create directory, skip all subdirectories creation
 
-	if(depth == 0) // Maximum recursion depth reached, subtract the file count and move to another branch
-	{
-		if(*nfiles > files_per_folder) (*nfiles) -= files_per_folder;
-    	else (*nfiles) = 0;
-		return;
-	}
+    if(depth == 0) // Maximum recursion depth reached, subtract the file count and move to another branch
+    {
+        if(*nfiles > files_per_folder) (*nfiles) -= files_per_folder;
+        else (*nfiles) = 0;
+        return;
+    }
 
-	// For non-zero depth, populate current directory with subdirectories
-	if(depth > 0)
-	{
-	    for(int i = 0; i < files_per_folder; i++)
+    // For non-zero depth, populate current directory with subdirectories
+    if(depth > 0)
+    {
+        for(int i = 0; i < files_per_folder; i++)
         {
-    	    sprintf(current_foldername, "%i/", i);
-    	    strcpy(current_path, path);
-    	    strcat(current_path, current_foldername);
-    	    rec_mkdir(current_path, nfiles, files_per_folder, depth - 1);
+            sprintf(current_foldername, "/%i", i);
+            strcpy(current_path, path);
+            strcat(current_path, current_foldername);
+            rec_mkdir(current_path, nfiles, files_per_folder, depth - 1);
         }
-	}
+    }
 }
 
 // Initialize directory tree for nfiles
@@ -139,8 +138,8 @@ void create_dirs(char * path, uint64_t nfiles, uint32_t files_per_folder)
     // Maximum recursion depth
     while(tmp > files_per_folder)
     {
-    	depth++;
-    	tmp /= files_per_folder;
+        depth++;
+        tmp /= files_per_folder;
     }
     tmp = nfiles;
     rec_mkdir(path, &tmp, files_per_folder, depth);
@@ -166,6 +165,9 @@ void path_append(char * path, char * fullpath, uint64_t n, uint64_t totnfiles, u
     }
 
     strcpy(fullpath, path);
+
+    if(tmp < files_per_folder) return;
+
     // Find total depth of nested folders
     while(tmp > files_per_folder)
     {
@@ -173,7 +175,7 @@ void path_append(char * path, char * fullpath, uint64_t n, uint64_t totnfiles, u
         div *= files_per_folder;
     }
 
-    while(div > 0)
+    while(tmp > files_per_folder)
     {
         name = n / div;
 
@@ -190,16 +192,16 @@ void path_append(char * path, char * fullpath, uint64_t n, uint64_t totnfiles, u
 // Checks if file in .jnk to delete only those files we've had added
 int isjnkfile(char * name)
 {
-	// Skip digits
-	while(*name != '\0')
-	{
-		if(*name == '.') break;
-		if(!(*name >= '0' && *name <= '9')) // Met illegal characters in filename
-			return 0;
-		name++;
-	}
-	if(strcmp(name, ".jnk") == 0) return 1;
-	return 0;
+    // Skip digits
+    while(*name != '\0')
+    {
+        if(*name == '.') break;
+        if(!(*name >= '0' && *name <= '9')) return 0; // Foreign chracters
+        name++;
+    }
+
+    if(strcmp(name, ".jnk") == 0) return 1;
+    return 0;
 }
 
 // rm -rf-like routine; warns about files that was not deleted properly
@@ -213,41 +215,41 @@ void delall(char * path)
     DIR * d = opendir(path);
     if(d != NULL)
     {
-    	for(uint64_t i = 0 ; i < FILES_PER_FOLDER_MAX; i++)
-    	{
-    		entry = readdir(d);
-    		if (! entry) break; // End of file list
+        for(uint64_t i = 0 ; i < FILES_PER_FOLDER_MAX; i++)  /// Cap files_per_folder to this constant
+        {
+            entry = readdir(d);
+            if (! entry) break; // End of file list
 
-    		d_name = entry->d_name;
+            d_name = entry->d_name;
 
-    		if(isdir(d_name)) // is a directory
-    		{
-    			if(strcmp(d_name, "..") == 0) continue; // skip special entries
+            if(isdir(d_name)) // is a directory
+            {
+                if(strcmp(d_name, "..") == 0) continue; // skip special entries
                 if(strcmp(d_name, "." ) == 0) continue;
-    			strcpy(newpath, path); // delete current subdirectory
-    			strcat(newpath, "/");
-    			strcat(newpath, d_name);
-    			delall(newpath);
-    		}
-    		else
-    		{
-    			strcpy(newpath, path); // delete current file
-    			strcat(newpath, "/");
-    			strcat(newpath, d_name);
-    			if(isjnkfile(d_name))
-    			{
-    				nofail_unlink(newpath);
-    			}
-    			else print(ERROR, "\nWarning! Foreign file in a directory tree");
-    		}
-    	}
+                strcpy(newpath, path); // delete current subdirectory
+                strcat(newpath, "/");
+                strcat(newpath, d_name);
+                delall(newpath);
+            }
+            else
+            {
+                strcpy(newpath, path); // delete current file
+                strcat(newpath, "/");
+                strcat(newpath, d_name);
+                if(isjnkfile(d_name))
+                {
+                    nofail_unlink(newpath);
+                }
+                else print(ERROR, "\nWarning! Foreign file in a directory tree");
+            }
+        }
 
-    	// No entries left in directory
-    	closedir(d);
-    	nofail_rmdir(path);
+        // No entries left in directory
+        closedir(d);
+        nofail_rmdir(path);
     }
     else
     {
-    	printerr("\nCannot remove files: failed to open directory");
+        printerr("\nCannot remove files: failed to open directory");
     }
 }
