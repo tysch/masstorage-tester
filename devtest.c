@@ -55,7 +55,7 @@ void filldevice(char * buf, struct options_s * option)
 
 // Compares buffer data with a generated random values and counts read mismatches
 // Returns error bytes count and marks damaged blocks for Reed-Solomon FEC testing
-uint32_t chkbuf_dev(char * buf, uint32_t bufsize,  struct fecblock * fecblocks, uint64_t *fpos, int nblocksizes, int isfectesting)
+static uint32_t chkbuf_dev(char * buf, uint32_t bufsize,  struct fecblock * fecblocks, uint64_t *fpos, int nblocksizes, int isfectesting)
 {
     uint32_t * ptr;
     uint32_t nerr = 0;

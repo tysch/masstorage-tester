@@ -1,6 +1,5 @@
 /*
  * nofailio.h
- *
  */
 
 #ifndef NOFAILIO_H_

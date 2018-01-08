@@ -51,6 +51,7 @@ void fillfiles(char * buf, struct options_s * options)
         sprintf(filename, "%s.jnk", fileindir);// Generate file name
 
         ioerrors = nofail_writefile(filename, buf, options->bufsize);
+        printf("\n\n%s\n",filename);
 
         byteswritten += options->bufsize - ioerrors;
         totioerrors += ioerrors;
@@ -151,7 +152,7 @@ void readfiles(char * buf, struct options_s * options)
         printprogress(show, 0);
     }
 
-    if(!(options->notdeletefiles)) delall(options->path);
+    if(!(options->notdeletefiles)) delall(options->path, 1);
 
     printprogress(log, 0);
 }

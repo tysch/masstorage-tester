@@ -1,6 +1,5 @@
 /*
  * saveload.h
- *
  */
 
 #ifndef SAVELOAD_H_

@@ -69,13 +69,13 @@ void todate(uint64_t s, char * date)
 uint64_t tobytes(char * x)
 {
     uint64_t bytes = 0;
-    uint64_t multiplier = 1;
+    uint64_t multiplier = 1LL;
     for(int i = 0; i < strlen(x); i++)
     {
-        if((x[i] >= '0') && (x[i] < '9'))
+        if((x[i] >= '0') && (x[i] <= '9'))
         {
-            bytes *= 10;
-            bytes += (x[i] - '0');
+            bytes *= 10LL;
+            bytes += (uint64_t) (x[i] - '0');
         }
         if((x[i] > 'A') && (x[i] < 'z'))
         {
@@ -88,22 +88,22 @@ uint64_t tobytes(char * x)
                     multiplier = 1024LL*1024LL*1024LL*1024LL;
                     break;
                 case 'G':
-                    multiplier = 1024*1024*1024;
+                    multiplier = 1024LL*1024LL*1024LL;
                     break;
                 case 'g':
-                    multiplier = 1024*1024*1024;
+                    multiplier = 1024LL*1024LL*1024LL;
                     break;
                 case 'M':
-                    multiplier = 1024*1024;
+                    multiplier = 1024LL*1024LL;
                     break;
                 case 'm':
-                    multiplier = 1024*1024;
+                    multiplier = 1024LL*1024LL;
                     break;
                 case 'K':
-                    multiplier = 1024;
+                    multiplier = 1024LL;
                     break;
                 case 'k':
-                    multiplier = 1024;
+                    multiplier = 1024LL;
                     break;
             }
         }

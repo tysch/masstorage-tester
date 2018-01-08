@@ -256,6 +256,7 @@ void check_input_values(struct options_s * arguments)
             printf("\nSingle file size is bigger than the total data size\n");
             exit(EXIT_FAILURE);
         }
+ //       strcat(arguments->path, "/"); // Append / to path string
     }
     if(arguments->totsize < 4)
     {

@@ -1,15 +1,9 @@
 /*
  * strconv.h
- *
  */
 
 #ifndef STRCONV_H_
 #define STRCONV_H_
-
-/*
- * strconv.c
- *
- */
 
 // Converts bytes count to human readable string
 void bytestostr(uint64_t bytes, char * str);

@@ -19,6 +19,6 @@ void create_dirs(char * path, uint64_t nfiles, uint32_t files_per_folder);
 void path_append(char * path, char * fullpath, uint64_t n, uint64_t totnfiles, uint32_t files_per_folder);
 
 // rm -rf-like routine; warns about files that was not deleted properly
-void delall(char * path);
+void delall(char * path, int preserve_topdir);
 
 #endif /* FILEIO_H_ */
