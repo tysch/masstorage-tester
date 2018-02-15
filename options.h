@@ -22,7 +22,9 @@ struct options_s
     int notdeletefiles;
     int background;
     int measure_fs_overhead;
+    int randomize;
     char *errcntmax;
+    int per_run_errcntmax;
 
     uint64_t totsize;
     uint32_t bufsize;

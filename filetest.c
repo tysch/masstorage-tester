@@ -26,6 +26,8 @@ void fillfiles(char * buf, struct options_s * options)
     uint64_t stopspace;
     double overhead;
 
+    uint64_t current_file;
+
     uint64_t nfiles = options->totsize / options->bufsize;
     time_t startrun = time(NULL);
     uint64_t byteswritten = 0;
@@ -36,6 +38,7 @@ void fillfiles(char * buf, struct options_s * options)
     if(stop_all) return;
 
     reseed(options->seed);
+    if(options->randomize) uniq_rand_init(nfiles, options->seed);
 
     if(options->measure_fs_overhead) startspace = free_space_in_dir(options->path);
 
@@ -45,13 +48,20 @@ void fillfiles(char * buf, struct options_s * options)
     {
         if(stop_all) break;
 
+        if(options->randomize)
+        {
+            current_file = uniq_rand();
+        }
+        else 
+            current_file = i;
+
         fillbuf(buf, options->bufsize);
 
-        path_append(options->path, fileindir, i, nfiles, options->files_per_folder); // Append path for additional folders
+        path_append(options->path, fileindir, current_file, nfiles, options->files_per_folder); // Append path for additional folders
         sprintf(filename, "%s.jnk", fileindir);// Generate file name
 
         ioerrors = nofail_writefile(filename, buf, options->bufsize);
-        printf("\n\n%s\n",filename);
+      //  printf("\n\n%s\n",filename);
 
         byteswritten += options->bufsize - ioerrors;
         totioerrors += ioerrors;
@@ -88,7 +98,7 @@ void fillfiles(char * buf, struct options_s * options)
 
 // Compares buffer data with a generated random values and counts read mismatches
 // Returns error bytes count
-uint32_t chkbuf_file(char * buf, uint32_t bufsize)
+static uint32_t chkbuf_file(char * buf, uint32_t bufsize)
 {
     uint32_t * ptr;
     uint32_t nerr = 0;
@@ -118,30 +128,71 @@ void readfiles(char * buf, struct options_s * options)
     time_t startrun = time(NULL);
     uint64_t bytesread = 0;
 
-    uint32_t ioerrors = 0;
+    uint64_t current_file;
+
+    int32_t ioerrors = 0;
     uint64_t totioerrors = 0;
     uint64_t memerrors = 0;
+    int64_t exs_size = 0;
 
     reseed(options->seed);
+    if(options->randomize) uniq_rand_init(nfiles, options->seed);
 
     for(uint64_t i = 0; i < nfiles; i++)
     {
         if(stop_all) break;
 
-        path_append(options->path, fileindir, i, nfiles, options->files_per_folder);              // Append path for additional folders
+        if(options->randomize)
+        {
+            current_file = uniq_rand();
+        }
+        else 
+            current_file = i;
+
+        path_append(options->path, fileindir, current_file, nfiles, options->files_per_folder);              // Append path for additional folders
         sprintf(filename, "%s.jnk", fileindir);// Generate file name
 
         ioerrors = nofail_readfile(filename, buf, options->bufsize, options->notdeletefiles);
+
+        if(ioerrors == -1) // File is missing
+        {
+            ioerrors = options->bufsize;
+            // error was logged earlier
+            print(OUT, "\n");
+        }
+        else
+        {
+            // Check for file size masmatch
+            exs_size = (int64_t ) nofail_filesize(filename) - ((int64_t ) options->bufsize);
+
+            if(exs_size < 0LL) // File is truncated
+            {
+                // ioerrors are already counted by nofail_readfile()
+                bytestostr(-exs_size, errsize);
+                sprintf(errmesg, "\n--------------------file %s is %-9s smaller\n", filename, errsize);
+                print(OUT, errmesg);
+            }
+
+            if((ioerrors) &&                         // Error count is non-zero
+               ((int32_t) (-exs_size) != ioerrors )) // And doesn't match truncation
+            {
+                bytestostr(ioerrors, errsize);
+                sprintf(errmesg, "\n--------------------file %s is damaged, %-9s errors\n", filename, errsize);
+                print(OUT, errmesg);
+            }
+
+            if(exs_size > 0LL) // Excessive data in file, also treated as ioerror
+            {
+                ioerrors += exs_size;
+                bytestostr(exs_size, errsize);
+                sprintf(errmesg, "\n--------------------file %s is %-9s larger\n", filename, errsize);
+                print(OUT, errmesg);
+            }
+        }
+
         totioerrors += ioerrors;
         bytesread += options->bufsize - ioerrors;
         memerrors += chkbuf_file(buf, options->bufsize);
-
-        if(ioerrors)
-        {
-            bytestostr(ioerrors, errsize);
-            sprintf(errmesg, "\n--------------------file %s is damaged, %-9s errors\n", filename, errsize);
-            print(OUT, errmesg);
-        }
 
         printprogress(readb, bytesread);
         printprogress(perc, (uint64_t)(1000000.0*((double)(i + 1) / nfiles)));

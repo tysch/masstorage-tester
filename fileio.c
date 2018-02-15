@@ -14,8 +14,6 @@
 #include "constants.h"
 #include "nofailio.h"
 
-// TODO: separate per-run and global error cap
-
 extern int stop_all;
 
 // Create and write buf to file; returns number of i/o errors
@@ -28,7 +26,7 @@ uint32_t nofail_writefile(char * path, char * buf, uint32_t bufsize)
 
     if(fd == -1)
     {
-        sprintf(errstr, "\n%s access error!\n", path);
+        sprintf(errstr, "    %s\n", path);
         print(ERROR, errstr);
         return bufsize;
     }
@@ -41,19 +39,19 @@ uint32_t nofail_writefile(char * path, char * buf, uint32_t bufsize)
     return ret;
 }
 
-// Read and delete file; returns number of i/o errors
-uint32_t nofail_readfile(char * path, char * buf, uint32_t bufsize, int notdeletefile)
+// Read and delete file; returns number of i/o errors or -1 if file cannot be opened
+int32_t nofail_readfile(char * path, char * buf, uint32_t bufsize, int notdeletefile)
 {
     uint32_t ret;
     char errstr[PATH_LENGTH];
 
-    int fd = nofail_open(path);
+    int fd = nofail_rd_open(path);
 
     if(fd == -1)
     {
-        sprintf(errstr, "\n%s access error!\n", path);
+        sprintf(errstr, "  %s", path);
         print(ERROR, errstr);
-        return bufsize;
+        return -1;
     }
     else
     {
@@ -64,14 +62,23 @@ uint32_t nofail_readfile(char * path, char * buf, uint32_t bufsize, int notdelet
     return ret;
 }
 
-int nofail_stat(const char *path, struct stat *buf)
+static int nofail_stat(const char *path, struct stat *buf)
 {
     int ret = stat(path, buf);
     if(ret == -1) printerr("\nFile stat reading error:");
     return ret;
 }
 
-int isdir(const char *path)
+uint64_t nofail_filesize(const char *path)
+{
+    struct stat buf;
+    int ret = stat(path, &buf);
+    if(ret == -1) printerr("\nFile stat reading error:");
+
+    return (buf.st_size);
+}
+
+static int isdir(const char *path)
 {
     struct stat buf;
     nofail_stat(path, &buf);
@@ -81,27 +88,23 @@ int isdir(const char *path)
 }
 
 // Wrapper for mkdir with error message logging
-int nofail_mkdir(char * path)
+static int nofail_mkdir(char * path)
 {
     int ret = mkdir(path, 0666);
-    //int ret = 0;
     if(ret == -1) printerr("\nDirectory creation error:");
     return ret;
 }
 
 // Wrapper for mkdir with error message logging
-int nofail_rmdir(char * path)
+static int nofail_rmdir(char * path)
 {
     int ret = rmdir(path);
     if(ret == -1) printerr("\nDirectory removing error:");
     return ret;
 }
 
-// TODO: Dirent have d type optimization
-// FIXME: make unused functions static
-
 // Recursively create directories up to depth level while counting total nfiles they can contain
-void rec_mkdir(char * path, uint64_t * nfiles, uint32_t files_per_folder, int depth, int is_topdir)
+static void rec_mkdir(char * path, uint64_t * nfiles, uint32_t files_per_folder, int depth, int is_topdir)
 {
     char current_foldername[DIGITS_MAX];
     char current_path[PATH_LENGTH];
@@ -171,13 +174,6 @@ void path_append(char * path, char * fullpath, uint64_t n, uint64_t totnfiles, u
 
     strcpy(fullpath, path);
 
-    if(tmp < files_per_folder) 
-    {
-   //     sprintf(filename, "/%lli", (long long) n);
-  //      strcat(fullpath, filename);
-   //     return;
-    }
-
     // Find total depth of nested folders
     while(tmp > files_per_folder)
     {
@@ -197,13 +193,10 @@ void path_append(char * path, char * fullpath, uint64_t n, uint64_t totnfiles, u
         sprintf(filename, "/%lli", (long long) name);
         strcat(fullpath, filename);
     }
-
- //   sprintf(filename, "/%lli", (long long) n);
- //   strcat(fullpath, filename);
 }
 
 // Checks if file in .jnk to delete only those files we've had added
-int isjnkfile(char * name)
+static int isjnkfile(char * name)
 {
     // Skip digits
     while(*name != '\0')
@@ -218,7 +211,6 @@ int isjnkfile(char * name)
 }
 
 // rm -rf-like routine; warns about files that was not deleted properly 
-// FIXME: Check if tested enough
 void delall(char * path, int preserve_topdir)
 {
     char newpath[PATH_LENGTH];
@@ -243,22 +235,11 @@ void delall(char * path, int preserve_topdir)
                 if(strcmp(d_name, "." ) == 0) continue;
 
             if(isdir(newpath)) // is a directory
-            {
-
-           //     strcpy(newpath, path); // delete current subdirectory
-            //    strcat(newpath, "/");
-             //   strcat(newpath, d_name);
                 delall(newpath, 0);
-            }
             else
             {
-            //    strcpy(newpath, path); // delete current file
-             //   strcat(newpath, "/");
-            //    strcat(newpath, d_name);
                 if(isjnkfile(d_name))
-                {
                     nofail_unlink(newpath);
-                }
                 else 
                 {
                     print(ERROR, "\nWarning! Foreign file in a directory tree");

@@ -2,7 +2,7 @@
  * init.c
  * Routines for input of application
  */
-
+#define _XOPEN_SOURCE 600
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,9 +21,9 @@ void print_usage(int arg)
 {
     if(arg < 3)
     {
-        puts("\n\n\n                                    Universal mass storage tester");
-        puts("\nUsage: massstoragetester -d <path> [-b] [-l <path>] [-e] [-s  <total size[kKmMgGtT]>] [-o|r|w|c <iterations>]");
-        puts("                          [-i <salt>][-t] [-f <file size[kKmMgGtT]> [-m <count>] [-q|-a] [-p]]\n");
+        puts("\n\n\n               Universal mass storage tester for Linux\n");
+        puts("\nUsage: massstoragetester -d <path> [-f] [-l <path> [-b]] [-e <count>] [-s  <total size[kKmMgGtT]>] [-o|r|w|c <iterations>]");
+        puts("                          [-i <salt>] [-t | -x] [-u <file/block size[kKmMgGtT]> [-m <count>] [-q|-a] [-p]]\n");
         puts(" -d --destination <path>  -- Path to test device or files root.");
         puts(" -s --total-size  <size>  -- Total bytes count to be written, rounded down to the size of a buffer.");
         puts("                             If not set, massstoragetester would fill entire device or all free space in target location.");
@@ -37,22 +37,29 @@ void print_usage(int arg)
         puts("                             -w, -r are useful for long term data retention tests.");
         puts("                             -w and -r must be launched with the same salt.");
         puts("");
-        puts(" -f --file <size>         -- Write to a bunch of files instead of device with defined size.");
-        puts("                             Single file should be less than 2 GiB and not larger than total data size.");
+        puts(" -f --file                -- Write to a bunch of files instead of device with defined size.");
+        puts("");
         puts(" -m --per-folder <count>  -- Set number of files per folder. If total files count exceeds <count>, they would be placed to a recursively created subdirectories");
         puts(" -p --preserve-files      -- Do not clean up files while reading back in file test mode.");
-        puts("                             Useful for long-term storage reliability testing.");
+        puts("                             Useful for long-term storage reliability testing and randomize option.");
         puts(" -q --overhead            -- Print filesystem storage overhead for the first run.");
         puts(" -a --overhead-continuous -- Print filesystem storage overhead for each read-write cycle.");
         puts("");
+        puts(" -x --randomize           -- Shuffle order of files/blocks instead of sequential passes.");
         puts(" -t --fec                 -- Estimates Reed-Solomon forward error correction code requirement for raw device for GF=256,");
-        puts("                             spare blocks count vs block size.");
+        puts("                             spare blocks count vs block size. Incompatible with --randomize.");
         puts("                             Total file size can be rounded down to a more optimal values.");
         puts("");
-        puts(" -i --salt                -- Non-zero integer salt for random data being written, default 1.");
-        puts(" -b --background          -- Skip all confirmations and start a new test as a daemon.");
+        puts(" -i --salt                -- Non-zero integer salt for random data being written, default 1. Also affects --randomize.");
+        puts(" -u --block-size <size>   -- Set block size for device test, default 1MiB. Must be larger than 16 bytes, 4-bytes aligned and not larger than 2 GiB or available RAM");
+        puts(" -u --filesize <size>     -- Set  file size for device test, default 1MiB. Must be larger than 16 bytes, 4-bytes aligned and not larger than 2 GiB or available RAM");
+        puts("");
+        puts(" -b --background          -- Skip all confirmations and start a new test as a daemon. Must be used with log file.");
         puts(" -l --logfile-path <path> -- Path to save and log file.");
-        puts(" -e --error-cap           -- Max number of system detected i/o errors before stopping test, default 1000.");
+        puts("");
+        puts(" -e --error-cap  <count>  -- Max number of system detected i/o errors before stopping test, default 1000. Set 0 to disable automatic abort.");
+        puts(" -k --per-run-error-cap   -- Reset error count for each cycle.");
+        puts("");
         puts(" -h --help                -- Prints this message.");
         puts("");
         exit(EXIT_SUCCESS);
@@ -67,7 +74,7 @@ void missing_argument(char * str)
 
 void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
 {
-    uint32_t filesiz;
+    uint64_t filesiz;
 
     for(int i = 0; i < argc; i++)
     {
@@ -82,33 +89,35 @@ void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
         {
             if(i + 1 == argc) missing_argument(argv[i]);
             else
+            {
                 strcpy(arguments->logpath, argv[i + 1]);
+                arguments->islogging = 1;
+            }
         }
 
         if((strcmp(argv[i], "-i") == 0) || (strcmp(argv[i], "--salt") == 0))
         {
-            if((i + 1 == argc)) missing_argument(argv[i]);
+            if(i + 1 == argc) missing_argument(argv[i]);
             else
                 arguments->seed = atoi(argv[i + 1]);
         }
 
         if((strcmp(argv[i], "-c") == 0) || (strcmp(argv[i], "---cycle") == 0))
         {
-            if((i + 1 == argc)) missing_argument(argv[i]);
+            if(i + 1 == argc) missing_argument(argv[i]);
             else
                 arguments->iterations = atoi(argv[i + 1]);
         }
 
-        if((strcmp(argv[i], "-f") == 0) || (strcmp(argv[i], "--file") == 0))
+        if((strcmp(argv[i], "-u") == 0) || (strcmp(argv[i], "--block-size") == 0) || (strcmp(argv[i], "--filesize") == 0))
         {
-            if((i + 1 == argc)) missing_argument(argv[i]);
+            if(i + 1 == argc) missing_argument(argv[i]);
             else
             {
-                arguments->iswritingtofiles = 1;
                 filesiz = tobytes(argv[i + 1]);
-                if(filesiz >= 0x7FFFFFFFLL) filesiz = 0x7FFFFFFFLL;
-                if(filesiz < 16) filesiz = 16;
-                filesiz -= (filesiz % 16);
+                if(filesiz >= FILE_SIZE_MAX) filesiz = FILE_SIZE_MAX;
+                if(filesiz < FILE_SIZE_MIN) filesiz = FILE_SIZE_MIN;
+                filesiz -= (filesiz % FILE_SIZE_MIN);
                 arguments->bufsize = (uint32_t) filesiz;
             }
         }
@@ -141,14 +150,19 @@ void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
             }
         }
 
-        if((strcmp(argv[i], "-t") == 0) || (strcmp(argv[i], "--fec") == 0)) arguments->isfectesting = 1;
+        if((strcmp(argv[i], "-f") == 0) || (strcmp(argv[i], "--file") == 0))                arguments->iswritingtofiles = 1;
+
+        if((strcmp(argv[i], "-x") == 0) || (strcmp(argv[i], "--randomize") == 0))           arguments->randomize = 1;
+        if((strcmp(argv[i], "-t") == 0) || (strcmp(argv[i], "--fec") == 0))                 arguments->isfectesting = 1;
 
         if((strcmp(argv[i], "-p") == 0) || (strcmp(argv[i], "--preserve-files") == 0))      arguments->notdeletefiles = 1;
         if((strcmp(argv[i], "-b") == 0) || (strcmp(argv[i], "--background") == 0))          arguments->background = 1;
         if((strcmp(argv[i], "-q") == 0) || (strcmp(argv[i], "--overhead") == 0))            arguments->measure_fs_overhead = ONESHOT;
         if((strcmp(argv[i], "-a") == 0) || (strcmp(argv[i], "--overhead-continuous") == 0)) arguments->measure_fs_overhead = REPEATED;
 
-        if((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "--help") == 0)) print_usage(0);
+        if((strcmp(argv[i], "-k") == 0) || (strcmp(argv[i], "--per-run-error-cap") == 0))   arguments->per_run_errcntmax = 1;
+
+        if((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "--help") == 0))                print_usage(0);
     }
 
     if(strcmp(arguments->path, "-") == 0)
@@ -158,7 +172,7 @@ void parse_cmd_val(int argc, char ** argv, struct options_s * arguments)
         exit(EXIT_FAILURE);
     }
 
-    if(((arguments->path[0] != '/') && (arguments->isfectesting == 1)))
+    if(((arguments->path[0] != '/') && (arguments->islogging == 1)))
     {
         printf("\nBackground run requires absolute path to the file/device.\n");
         fflush(stdout);
@@ -256,7 +270,6 @@ void check_input_values(struct options_s * arguments)
             printf("\nSingle file size is bigger than the total data size\n");
             exit(EXIT_FAILURE);
         }
- //       strcat(arguments->path, "/"); // Append / to path string
     }
     if(arguments->totsize < 4)
     {
@@ -266,6 +279,11 @@ void check_input_values(struct options_s * arguments)
     if(arguments->seed == 0)
     {
         printf("\nseed value cannot be be zero\n");
+        exit(EXIT_FAILURE);
+    }
+    if((arguments->isfectesting == 1) && (arguments->randomize == 1))
+    {
+        printf("\nFEC testing is incompatible with randomized i/o, skipping...\n");
         exit(EXIT_FAILURE);
     }
 }
@@ -341,7 +359,6 @@ void print_folder_size(uint64_t totsize, uint32_t bufsize)
     printf("\nTesting %s free space\n", sizestr);
 }
 
-// TODO: replace custom prints to perror
 void make_daemon(void)
 {
     pid_t pid;
@@ -354,7 +371,7 @@ void make_daemon(void)
     }
     else if(pid != 0)
     {
-        printf("\nGoing to the background\n");
+        printf("\nGoing to the background, pid = %i\n", pid);
         exit(EXIT_SUCCESS);
     }
 
@@ -362,13 +379,6 @@ void make_daemon(void)
     if(setsid() == -1)
     {
         perror("Failed to create new sid");
-        exit(EXIT_FAILURE);
-    }
-
-    // set the working directory to the root directory
-    if(chdir("/") == -1)
-    {
-        perror("Failed to set working directory to /");
         exit(EXIT_FAILURE);
     }
 
@@ -380,4 +390,18 @@ void make_daemon(void)
     open("/dev/null", O_RDWR);
     open("/dev/null", O_RDWR);
     open("/dev/null", O_RDWR);
+}
+
+// Allocates memory aligned buffer for O_DIRECT operations
+void * allocate_buffer(uint32_t size)
+{
+    void * ret;
+
+    if(posix_memalign(&ret, BUF_ALGNMT, size) != 0)
+    {
+        printf("\nmemory allocation error\n");
+        fflush(stdout);
+        exit(EXIT_FAILURE);
+    }
+    return ret;
 }

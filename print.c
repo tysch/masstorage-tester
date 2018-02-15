@@ -14,18 +14,6 @@ void print(enum print_mode action, const char * string)
     static int islogging = 0;
     static long long errorcount = 0;
     static long long errcntmax = 0;
-    if((errcntmax) &&(errorcount > errcntmax))
-    {
-        printf("\nToo many i/o errors happened, exiting now...\n");
-        fflush(stdout);
-        if(islogging)
-        {
-            fprintf(logfile, "\nToo many i/o errors happened, exiting now...\n");
-            fflush(logfile);
-        }
-        // Stop test routine and gentle exit
-        stop_all = 1;
-    }
 
     switch (action)
     {
@@ -41,7 +29,8 @@ void print(enum print_mode action, const char * string)
             break;
 
         case ERRCNT_INIT :
-            sscanf(string, "%lli", &errcntmax);
+            errcntmax = atoi(string);
+            errorcount = 0;
             break;
 
         case LOGFILE_EXIT :
@@ -76,6 +65,20 @@ void print(enum print_mode action, const char * string)
                 fflush(logfile);
             }
             break;
+    }
+
+    // Exit if too many errors occured
+    if((errcntmax) && (errorcount > errcntmax) && (!stop_all))
+    {
+        printf("\nToo many i/o errors happened, exiting now...\n");
+        fflush(stdout);
+        if(islogging)
+        {
+            fprintf(logfile, "\nToo many i/o errors happened, exiting now...\n");
+            fflush(logfile);
+        }
+        // Stop test routine and gentle exit
+        stop_all = 1;
     }
 }
 

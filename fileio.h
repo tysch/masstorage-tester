@@ -9,8 +9,10 @@
 // Create and write buf to file; returns number of i/o errors
 uint32_t nofail_writefile(char * path, char * buf, uint32_t bufsize);
 
-// Read and delete file; returns number of i/o errors
-uint32_t nofail_readfile(char * path, char * buf, uint32_t bufsize, int notdeletefile);
+// Read and delete file; returns number of i/o errors or -1 if file cannot be opened
+int32_t nofail_readfile(char * path, char * buf, uint32_t bufsize, int notdeletefile);
+
+uint64_t nofail_filesize(const char *path);
 
 // Initialize directory tree for nfiles
 void create_dirs(char * path, uint64_t nfiles, uint32_t files_per_folder);

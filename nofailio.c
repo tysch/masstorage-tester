@@ -1,4 +1,8 @@
-#define _XOPEN_SOURCE 500
+/*
+ * nofailio.c
+ */
+#define _GNU_SOURCE
+
 #include <stdint.h>
 #include <stdio.h>
 #include <errno.h>
@@ -9,6 +13,7 @@
 #include "print.h"
 
 static char errmesg[PATH_LENGTH];
+extern int stop_all;
 
 void nofail_fsync(int fd)
 {
@@ -21,7 +26,7 @@ void nofail_fsync(int fd)
 
 int nofail_open(char * path)
 {
-    int fd = open64(path, O_RDWR | O_SYNC | O_CREAT, 0666);
+    int fd = open64(path, O_RDWR | O_SYNC | O_CREAT | O_DIRECT, 0666);
 
     if(fd == -1) printerr("\nFile/device open error:");
     if((fd == -1) && (errno == EROFS))
@@ -30,6 +35,14 @@ int nofail_open(char * path)
         fd = open64(path, O_RDONLY);
         if(fd == -1) printerr("\nFile/device open error:");
     }
+
+    return fd;
+}
+
+int nofail_rd_open(char * path)
+{
+    int fd = open64(path, O_RDONLY | O_DIRECT);
+    if(fd == -1) printerr("\nFile/device open error:");
 
     return fd;
 }
@@ -61,7 +74,7 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
     uint32_t padzero_end = 0;
     uint32_t skipbytes = SKIP_BYTES;
 
-    uint32_t retries;
+    uint32_t retries = MAX_RETRIES;
 
     uint32_t ioreaderrcnt = 0;
     int firsterr = 0;
@@ -70,8 +83,8 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
 
     do
     {
-        retries = MAX_RETRIES;
-        curr_pos = offset + bufpos; // Absolute file position
+    	if(stop_all) return 0;
+    	curr_pos = offset + bufpos; // Absolute file position
         offtbuf = buf + bufpos;     // Pointer to the beginning of the unread buffer section
         remsize = bufsize - bufpos; // Remaining bytes to read
 
@@ -80,7 +93,8 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
 
         if(res > 0)    // Something have been read successfully
         {
-            bufpos += res;
+            retries = MAX_RETRIES;
+        	bufpos += res;
             continue;  // Move to the next unread position
         }
 
@@ -97,7 +111,8 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
 
             while(retries > 0) // Try to read again if error is recoverable
             {
-                retries--;
+            	if(stop_all) return 0;
+            	retries--;
                 if((res == 0) || // No data read while no errors specified
                       (
                           (res == -1) &&  // Read was interrupted or may be recoverable
@@ -119,8 +134,7 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
             bufpos += res;
             continue; // Move to the next unread position
         }
-
-        if(res == -1) // Read failed even after retries
+        if(res <= 0) // Read failed even after retries
         {
             sprintf(errmesg, "\rError: unreadable block starting at %llu, skipping %i bytes",
                                                     (unsigned long long) curr_pos, skipbytes);
@@ -141,7 +155,7 @@ uint32_t nofail_pread(int fd, char * buf, uint32_t bufsize, uint64_t offset)
             bufpos = padzero_end;
 
             skipbytes = skipbytes + skipbytes / SKIP_DIV;
-            if(skipbytes > (1 << 30)) skipbytes = 1 << 30; // To prevent overflow TODO: move to constants.h
+            if(skipbytes > MAX_SKIP_BYTES ) skipbytes = MAX_SKIP_BYTES;
         }
     }
     while (bufpos != bufsize); // Buffer is full
@@ -161,7 +175,7 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
 
     uint32_t skipbytes = SKIP_BYTES; //initial count of bytes to skip
 
-    uint32_t retries;
+    uint32_t retries = MAX_RETRIES;
 
     int32_t iowriteerrcnt = 0;
     int firsterr = 0;
@@ -170,8 +184,8 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
 
     do
     {
-        retries = MAX_RETRIES;
-        curr_pos = offset + bufpos; // Absolute file position
+    	if(stop_all) return 0;
+    	curr_pos = offset + bufpos; // Absolute file position
         offtbuf = buf + bufpos;     // Pointer to the beginning of the unwritten buffer section
         remsize = bufsize - bufpos; // Remaining bytes to write
 
@@ -180,7 +194,8 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
 
         if(res > 0)    // Something have been written successfully
         {
-            bufpos += res;
+            retries = MAX_RETRIES;
+        	bufpos += res;
             continue;  // Move to the next unwritten position
         }
 
@@ -197,10 +212,11 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
 
             while(retries > 0) // Try to write again if error is recoverable
             {
-                retries--;
+            	if(stop_all) return 0;
+            	retries--;
                 if(
-                      (res == 0) ||
-                      (                  // No data written while no errors specified
+                      (res == 0) ||       // No data written while no errors specified
+                      (
                           (res == -1) &&  // Write was interrupted or may be recoverable
                           (
                                    (errno == EINTR) || (errno == EAGAIN) || (errno == EIO)
@@ -222,7 +238,7 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
             continue; // Move to the next unwritten position
         }
 
-        if(res == -1) // Write failed even after retries
+        if(res <= 0) // Write failed even after retries
         {
             sprintf(errmesg, "\rError: cannot write block starting at %llu, skipping %i bytes ",
                                                        (unsigned long long) curr_pos, skipbytes);
@@ -239,7 +255,7 @@ uint32_t nofail_pwrite(int fd, char * buf, uint32_t bufsize, uint64_t offset)
             iowriteerrcnt += bufpos;
 
             skipbytes = skipbytes + skipbytes / SKIP_DIV;
-            if(skipbytes > (1 << 30)) skipbytes = 1 << 30; // To prevent overflow TODO:move to constants.h
+            if(skipbytes > MAX_SKIP_BYTES ) skipbytes = MAX_SKIP_BYTES; // To prevent overflow
         }
     }
     while (bufpos != bufsize); // Nothing left to write

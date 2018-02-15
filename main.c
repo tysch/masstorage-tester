@@ -12,15 +12,13 @@
 int stop_cycling = 0;
 int stop_all = 0;
 
-static int CtrlCs = 5; // Prevent premature shutdown upon repeated Ctrl+C
 void sigint_handler(int s)
 {
     if(stop_cycling && stop_all)
     {
         printf("\n\nShutting down..\n\n");
-        CtrlCs--;
         fflush(stdout);
-        if(CtrlCs < 1) exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
 
     if(stop_cycling && (!stop_all))
@@ -62,9 +60,11 @@ int main(int argc, char ** argv)
         .islogging = 0,
         .notdeletefiles = 0,
         .measure_fs_overhead = 0,
+        .randomize = 0,                                 // Randomize order of writing files or blocks
         .errcntmax = "1000",
+        .per_run_errcntmax = 0,
         .totsize = 0LL,
-        .bufsize = DISK_BUFFER
+        .bufsize = DISK_BUFFER_DEFAULT
     };
 
     char * buf;
@@ -115,12 +115,7 @@ int main(int argc, char ** argv)
 
     if(arguments.islogging) log_init(argc, argv, arguments.logpath);
 
-    buf = malloc(sizeof * buf * (arguments.bufsize));
-    if(buf == NULL)
-    {
-        printf("\nNot enough RAM");
-        exit(EXIT_FAILURE);
-    }
+    buf = allocate_buffer(arguments.bufsize);
 
     switch(mod)
     {

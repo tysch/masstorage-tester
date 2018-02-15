@@ -15,6 +15,7 @@ void singlewrite_f(char * buf, struct options_s * options)
 {
     printprogress(reset, 0);
     printprogress(writep, 0);
+    print(ERRCNT_INIT, options->errcntmax);
 
     if(options->iswritingtofiles)
         fillfiles(buf, options);
@@ -29,6 +30,7 @@ void singleread_f(char * buf, struct options_s * options)
 {
     printprogress(reset, 0);
     printprogress(readp, 0);
+    print(ERRCNT_INIT, options->errcntmax);
 
     if(options->islogging) load(options);
     if(stop_all) return;
@@ -42,13 +44,22 @@ void singleread_f(char * buf, struct options_s * options)
 void cycle_f(char * buf, struct options_s * options)
 {
     printprogress(reset, 0);
-    if(options->islogging) load(options);
+    print(ERRCNT_INIT, options->errcntmax);
+    if(options->islogging)
+    {
+        load(options);
+        options->seed++;
+    }
 
     if(stop_all) return;
     do
     {
         if(stop_all) break;
+
         options->iterations--;
+
+        if(options->per_run_errcntmax) print(ERRCNT_INIT, options->errcntmax);
+
         printprogress(writep, 0);
 
         if(options->iswritingtofiles)
@@ -57,7 +68,7 @@ void cycle_f(char * buf, struct options_s * options)
             filldevice(buf, options);
 
         if(stop_all) break;
-
+// TODO: automated tests with summary
         if(options->islogging) save(options);
         if(stop_all) break;
 

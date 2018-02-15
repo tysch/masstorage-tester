@@ -18,9 +18,13 @@ void filldevice(char * buf, struct options_s * option)
     uint32_t ioerrors = 0;
     uint64_t totioerrors = 0;
 
+    uint64_t wrpos;
+
     if(stop_all) return;
 
     reseed(option->seed);
+    if(option->randomize) uniq_rand_init(option->totsize / option->bufsize, option->seed);
+
     int fd = nofail_open(option->path);
     if(fd == -1)
     {
@@ -29,12 +33,21 @@ void filldevice(char * buf, struct options_s * option)
     }
     else
     {
-        for(uint64_t wrpos = 0; wrpos < option->totsize; wrpos += option->bufsize)
+        for(uint64_t i = 0; i < option->totsize / option->bufsize; i++)
         {
             if(stop_all) break;
+
+            if(option->randomize)
+            {
+                wrpos = option->bufsize * uniq_rand();
+            }
+            else 
+                wrpos = option->bufsize * i;
+
             fillbuf(buf, option->bufsize);
 
             ioerrors = nofail_pwrite(fd, buf, option->bufsize, wrpos);
+
             byteswritten += option->bufsize - ioerrors;
             totioerrors += ioerrors;
             // Printing stats
@@ -94,13 +107,13 @@ static uint32_t chkbuf_dev(char * buf, uint32_t bufsize,  struct fecblock * fecb
 
 // Reads and checks written data to the device
 void readdevice(char * buf, struct options_s * option)
-
-//(char * path, char * buf, uint32_t bufsize, uint64_t count, uint32_t seed, int isfectesting)
 {
     uint64_t bytesread = 0;
     uint32_t ioerrors = 0;
     uint64_t totioerrors = 0;
     uint64_t memerrors = 0;
+
+    uint64_t rdpos;
 
     int nblocksizes = 0;
     struct fecblock * fecblocks = NULL;
@@ -110,7 +123,7 @@ void readdevice(char * buf, struct options_s * option)
 
     time_t startrun = time(NULL);
 
-    int fd = nofail_open(option->path);
+    int fd = nofail_rd_open(option->path);
     if(fd == -1)
     {
         print(ERROR, "\nFatal error\n");
@@ -119,12 +132,22 @@ void readdevice(char * buf, struct options_s * option)
     else
     {
         reseed(option->seed);
+        if(option->randomize) uniq_rand_init(option->totsize / option->bufsize, option->seed);
 
         if(option->isfectesting) fecblocks = fectest_init(option->totsize, &nblocksizes);
 
-        for(uint64_t rdpos = 0; rdpos < option->totsize; rdpos += option->bufsize)
+
+        for(uint64_t i = 0; i < option->totsize / option->bufsize; i++)
         {
             if(stop_all) break;
+
+            if(option->randomize)
+            {
+                rdpos = option->bufsize * uniq_rand();
+            }
+            else 
+                rdpos = option->bufsize * i;
+
             ioerrors = nofail_pread(fd, buf, option->bufsize, rdpos);
             totioerrors += ioerrors;
 

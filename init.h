@@ -36,4 +36,6 @@ void print_folder_size(uint64_t totsize, uint32_t bufsize);
 
 void make_daemon(void);
 
+void * allocate_buffer(uint32_t size);
+
 #endif /* INIT_H_ */

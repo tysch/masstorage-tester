@@ -16,6 +16,8 @@ void nofail_fsync(int fd);
 
 int nofail_open(char * path);
 
+int nofail_rd_open(char * path);
+
 void nofail_close(int fd);
 
 int nofail_unlink(char * path);
