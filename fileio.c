@@ -90,7 +90,7 @@ static int isdir(const char *path)
 // Wrapper for mkdir with error message logging
 static int nofail_mkdir(char * path)
 {
-    int ret = mkdir(path, 0666);
+    int ret = mkdir(path, 0777);
     if(ret == -1) printerr("\nDirectory creation error:");
     return ret;
 }
