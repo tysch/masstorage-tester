@@ -129,6 +129,7 @@ void readfiles(char * buf, struct options_s * options)
     uint64_t bytesread = 0;
 
     uint64_t current_file;
+    int64_t filesize_from_stat = 0;
 
     int32_t ioerrors = 0;
     uint64_t totioerrors = 0;
@@ -152,6 +153,7 @@ void readfiles(char * buf, struct options_s * options)
         path_append(options->path, fileindir, current_file, nfiles, options->files_per_folder);              // Append path for additional folders
         sprintf(filename, "%s.jnk", fileindir);// Generate file name
 
+        filesize_from_stat = (int64_t ) nofail_filesize(filename);
         ioerrors = nofail_readfile(filename, buf, options->bufsize, options->notdeletefiles);
 
         if(ioerrors == -1) // File is missing
@@ -163,7 +165,7 @@ void readfiles(char * buf, struct options_s * options)
         else
         {
             // Check for file size masmatch
-            exs_size = (int64_t ) nofail_filesize(filename) - ((int64_t ) options->bufsize);
+            exs_size = filesize_from_stat - ((int64_t ) options->bufsize);
 
             if(exs_size < 0LL) // File is truncated
             {
